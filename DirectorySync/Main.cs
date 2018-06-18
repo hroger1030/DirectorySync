@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -12,390 +14,455 @@ namespace DirectoryCopy
         protected delegate void SetTextCallback(string text, bool flush_log);
         protected delegate void UpdateProgressBar(int amount);
 
-        #region Fields
+        private static readonly int MAX_PATH = 260;
+        protected StringBuilder _MessageLog;
+        protected bool _TestMode;
+        protected volatile bool _HaltProcessing;
+        protected Form _MainForm;
+        protected Stopwatch _Timer;
 
-            private static readonly int MAX_PATH = 260;
 
-            protected StringBuilder _MessageLog;
-            protected bool _TestMode;
-            protected volatile bool _HaltProcessing;
-            protected Form _MainForm;
-            protected Stopwatch _Timer;
-
-        #endregion
-
-        #region Methods
-
-            protected bool ValidatePaths()
+        protected bool ValidatePaths()
+        {
+            if (!Directory.Exists(this.txtSourceDir.Text))
             {
-                if (!Directory.Exists(this.txtSourceDir.Text))
-                {
-                    LogMesage("Error: Source directory does not exist.");
-                    return false;
-                }
-
-                if (!Directory.Exists(this.txtDestinationDir.Text))
-                {
-                    LogMesage("Error: Destination directory does not exist.");
-                    return false;
-                }
-
-                if (this.txtSourceDir.Text == this.txtDestinationDir.Text)
-                {
-                    LogMesage("Error: Source directory and destination directory must be different.");
-                    return false;
-                }
-
-                return true;
-            } 
-
-            protected void RemoveFileAttributes(string directory, bool recursive)
-            {
-                DirectoryInfo directory_info = new DirectoryInfo(directory);
-
-                if (directory_info.Attributes != FileAttributes.Normal)
-                    directory_info.Attributes = FileAttributes.Normal;
-
-                string[] files = Directory.GetFiles(directory);
-
-                foreach (string file in files)
-                    File.SetAttributes(file, FileAttributes.Normal);
-
-                if (recursive)
-                {
-                    string[] directories = Directory.GetDirectories(directory);
-
-                    foreach (string subdirectory in directories)
-                        RemoveFileAttributes(subdirectory, recursive);
-                }
+                LogMesage("Error: Source directory does not exist.");
+                return false;
             }
 
-            protected int CountFiles(string directory)
+            if (!Directory.Exists(this.txtDestinationDir.Text))
             {
-                int count = Directory.GetFiles(directory).Length;
-
-                foreach (var sub_directory in Directory.GetDirectories(directory))
-                    count += CountFiles(sub_directory);
-                
-                return count;
+                LogMesage("Error: Destination directory does not exist.");
+                return false;
             }
 
-            protected async void SyncDirectory(string source_directory, string destination_directory)
-            {       
-                if (ValidatePaths())
-                {
-                    _Timer.Restart();
-
-                    LogMesage("Beginning Synchronization.", true);
-
-                    await Task.Run(() =>
-                    {
-                        SyncDirectory(source_directory, destination_directory, source_directory, destination_directory);
-                    });
-
-                    if (_HaltProcessing)
-                        LogMesage("Synchronization halted.", true);
-                    else
-                        LogMesage("Synchronization complete.", true);
-
-                    _Timer.Stop();
-                }
+            if (this.txtSourceDir.Text == this.txtDestinationDir.Text)
+            {
+                LogMesage("Error: Source directory and destination directory must be different.");
+                return false;
             }
 
-            protected void SyncDirectory(string source_root, string destination_root, string source_directory, string destination_directory)
+            return true;
+        }
+
+        protected void RemoveFileAttributes(string directory, bool recursive)
+        {
+            DirectoryInfo directory_info = new DirectoryInfo(directory);
+
+            if (directory_info.Attributes != FileAttributes.Normal)
+                directory_info.Attributes = FileAttributes.Normal;
+
+            string[] files = Directory.GetFiles(directory);
+
+            foreach (string file in files)
+                File.SetAttributes(file, FileAttributes.Normal);
+
+            if (recursive)
             {
-                if (_HaltProcessing == true)
-                    return;       
+                string[] directories = Directory.GetDirectories(directory);
 
-                int file_count = 0; 
+                foreach (string subdirectory in directories)
+                    RemoveFileAttributes(subdirectory, recursive);
+            }
+        }
 
-                LogMesage(string.Format("Starting sync of directory {0}.", source_directory));
+        protected int CountFiles(string startingDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(startingDirectory))
+                throw new ArgumentException("Directory path cannot be null or empty");
 
-                if (!Directory.Exists(destination_directory))
+            if (!Directory.Exists(startingDirectory))
+                throw new ArgumentException($"Directory {startingDirectory} does not exist");
+
+            int count = 0;
+            var work_queue = new Queue<string>();
+
+            work_queue.Enqueue(startingDirectory);
+
+            while (work_queue.Count > 0)
+            {
+                string current_firetory = work_queue.Dequeue();
+
+                var buffer = Directory.GetDirectories(current_firetory);
+
+                foreach (var subdirectory in buffer)
+                    work_queue.Enqueue(subdirectory);
+
+                count += Directory.GetFiles(current_firetory).Length;
+            }
+
+            return count;
+        }
+
+        protected async void SyncDirectory(string sourceDirectory, string destinationDirectory)
+        {
+            if (ValidatePaths())
+            {
+                _Timer.Restart();
+
+                LogMesage("Calculating avaialble space...", true);
+
+                var drive_root = Path.GetPathRoot(destinationDirectory);
+
+                long source_size = GetTotalDirectorySize(sourceDirectory);
+                long destination_size = GetTotalDirectorySize(destinationDirectory);
+                long free_space = GetTotalFreeSpace(drive_root);
+
+                if (source_size > (destination_size + free_space))
                 {
-                    LogMesage("Creating " + destination_directory);
-
-                    if (!_TestMode)
-                        Directory.CreateDirectory(destination_directory);
-                }
-             
-                // remove non-existing files. Look at each file in the destination directory and if a 
-                // matching file does not exist in the source directory remove it.
-                if (Directory.Exists(destination_directory))
-                {
-                    foreach (string file in Directory.GetFiles(destination_directory))
-                    {
-                        string source_filename = source_directory + "\\" + Path.GetFileName(file);
-
-                        if (!File.Exists(source_filename))
-                        {
-                            if (!_TestMode)
-                            {
-                                var file_attributes = File.GetAttributes(file);
-
-                                if (file_attributes != FileAttributes.Normal)
-                                    File.SetAttributes(file, FileAttributes.Normal);
-
-                                File.Delete(file);
-                            }
-
-                            LogMesage("Deleting " + file);
-                        }
-                    }
-                }
-
-                // copy files.  
-                // If the file exists and doesn't match the last write time, overwrite                
-                if (Directory.Exists(source_directory))
-                {
-                    foreach (string item in Directory.GetFiles(source_directory))
-                    {
-                        string destination_filename = destination_directory + "\\"+ Path.GetFileName(item);
-
-                        if (File.Exists(destination_filename))
-                        {
-                            if (File.GetLastWriteTime(item) != File.GetLastWriteTime(destination_filename))
-                            {
-                                if (destination_filename.Length > 260)
-                                    LogMesage(string.Format("Path {0} is {1} characters long. This exceeds the {2} character limit.", destination_filename, destination_filename.Length, MAX_PATH));
-
-                                if (!_TestMode)
-                                {
-                                    // Make sure we are clear for move.
-
-                                    var file_attributes = File.GetAttributes(destination_filename);
-
-                                    if (file_attributes != FileAttributes.Normal)
-                                        File.SetAttributes(destination_filename, FileAttributes.Normal);
-
-                                    File.Copy(item, destination_filename, true);
-                                }
-
-                                LogMesage("Updating out of date file " + destination_filename);
-                            }
-                        }
-                        else
-                        {
-                            if (!_TestMode)
-                                File.Copy(item, destination_filename);
-
-                            LogMesage("Copying " + destination_filename);
-                        }
-
-                        file_count++;
-                    }
+                    LogMesage($"Cannot copy files, not enought space avaialble on '{drive_root}'", true);
+                    return;
                 }
 
-                // remove any directories that exist in the destination but not in the source
-                // need to check for existance beacuse in test mode, new directories will not be created.
-                if (Directory.Exists(destination_directory))
+                LogMesage("Sufficent space avaialble, beginning Synchronization.", true);
+
+                await Task.Run(() =>
                 {
-                    foreach (string directory in Directory.GetDirectories(destination_directory))    
-                    {
-                        string source = directory.Replace(destination_root, source_root);
-
-                        if (!Directory.Exists(source))
-                        {
-                            LogMesage("Deleting " + directory);
-
-                            if (!_TestMode)
-                            {
-                                DirectoryInfo di = new DirectoryInfo(directory);
-                                RemoveFileAttributes(directory, true);
-                                di.Delete(true);
-                            }
-                        }
-                    } 
-                }
-
-                string[] directory_list = Directory.GetDirectories(source_directory);
-
-                //// call function recursively on subdirectories
-                //foreach (var item in directory_list)    
-                //{
-                //    string destination = destination_root + item.Replace(source_root, string.Empty);
-                //    SyncDirectory(source_root, destination_root ,item, destination);
-                //}
-
-                Parallel.ForEach(directory_list, new ParallelOptions { MaxDegreeOfParallelism = 4 }, current_directory =>
-                {
-                    string destination = destination_root + current_directory.Replace(source_root, string.Empty);
-                    SyncDirectory(source_root, destination_root ,current_directory, destination);
+                    SyncDirectory(sourceDirectory, destinationDirectory, sourceDirectory, destinationDirectory);
                 });
 
-                LogMesage(string.Format("Sync of directory {0} complete.", source_directory), true);
-                UpdateProgress(file_count);
-            }
-
-            protected void UpdateProgress(int amount)
-            {
-                if (this.pbFiles.InvokeRequired)
-                {
-				    UpdateProgressBar delegate_call = new UpdateProgressBar(UpdateProgress);
-				    this.Invoke(delegate_call, new object[] { amount });
-                }
+                if (_HaltProcessing)
+                    LogMesage("Synchronization halted.", true);
                 else
-                {
-                    this.pbFiles.Step = amount;
-                    this.pbFiles.PerformStep();
+                    LogMesage("Synchronization complete.", true);
 
-                    Console.WriteLine("Amount: " + amount.ToString());
-                }
+                _Timer.Stop();
+            }
+        }
+
+        protected void SyncDirectory(string sourceRoot, string destinationRoot, string sourceDirectory, string destinationDirectory)
+        {
+            if (_HaltProcessing == true)
+                return;
+
+            int file_count = 0;
+
+            LogMesage($"Starting sync of directory {sourceDirectory}.");
+
+            if (!Directory.Exists(destinationDirectory))
+            {
+                LogMesage("Creating " + destinationDirectory);
+
+                if (!_TestMode)
+                    Directory.CreateDirectory(destinationDirectory);
             }
 
-            protected void LogMesage(string message)
+            // remove non-existing files. Look at each file in the destination directory and if a 
+            // matching file does not exist in the source directory remove it.
+            if (Directory.Exists(destinationDirectory))
             {
-                LogMesage(message, false);
-            }
-
-            protected void LogMesage(string message, bool flush_log)
-            {
-                if (_MessageLog == null)
-                    _MessageLog = new StringBuilder();
-             
-                // only update UI every several seconds
-
-                if (this.txtLog.InvokeRequired)
+                foreach (string file in Directory.GetFiles(destinationDirectory))
                 {
-				    SetTextCallback delegate_call = new SetTextCallback(LogMesage);
-				    this.Invoke(delegate_call, new object[] { message, flush_log });
-                }
-                else
-                {
-                    _MessageLog.AppendLine(string.Format("<{0}> {1}", DateTime.Now.ToLongTimeString(), message));
+                    string source_filename = sourceDirectory + "\\" + Path.GetFileName(file);
 
-                    if (!_Timer.IsRunning)
+                    if (!File.Exists(source_filename))
                     {
-                        this.txtLog.Text = _MessageLog.ToString();
-                    }
-                    else if (_Timer.ElapsedMilliseconds > 5000 || flush_log)
-                    { 
-                        this.txtLog.Text = _MessageLog.ToString();
+                        if (!_TestMode)
+                        {
+                            var file_attributes = File.GetAttributes(file);
 
-                        _Timer.Restart();
-                        _MessageLog.Clear();
+                            if (file_attributes != FileAttributes.Normal)
+                                File.SetAttributes(file, FileAttributes.Normal);
+
+                            File.Delete(file);
+                        }
+
+                        LogMesage("Deleting " + file);
                     }
                 }
             }
 
-            protected void SetTestMode()
+            // copy files.  
+            // If the file exists and doesn't match the last write time, overwrite                
+            if (Directory.Exists(sourceDirectory))
             {
-                _TestMode = this.chkTestMode.Checked;
-
-                if (_TestMode)
-                    LogMesage("Test mode is ON: No updates will be made.");
-                else
-                    LogMesage("Test mode is OFF: Updates will be made normally.");
-            }
-
-        #endregion
-
-        #region Events
-
-            public frmMain()
-            {
-                InitializeComponent();
-
-                this.Text               = "Jolly Roger's Directory Sync";
-                this.btnSync.Enabled    = false;
-                this.btnCancel.Enabled  = false;
-                this.lblAbout.Text      = "Written by Roger Hill, 2011";
-                
-                //_MessageWindow          = this.txtLog;
-                _MainForm               = this;
-                _Timer                  = new Stopwatch();
-
-                LogMesage("Jolly Roger's Directory Sync, Version " + Application.ProductVersion);
-                LogMesage("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.");
-
-                SetTestMode();
-            }
-
-            private async void btnSync_Click(object sender, EventArgs e)
-            {
-                _HaltProcessing = false;
-
-                try
+                foreach (string item in Directory.GetFiles(sourceDirectory))
                 {
-                    this.pbFiles.Maximum = CountFiles(this.txtSourceDir.Text);
-                    this.pbFiles.Value = 0;
+                    string destination_filename = destinationDirectory + "\\" + Path.GetFileName(item);
 
-                    await Task.Run(() =>
+                    if (File.Exists(destination_filename))
                     {
-                        SyncDirectory(this.txtSourceDir.Text, this.txtDestinationDir.Text);
-                    });
+                        if (File.GetLastWriteTime(item) != File.GetLastWriteTime(destination_filename))
+                        {
+                            if (destination_filename.Length > 260)
+                                LogMesage($"Path {destination_filename}' is {destination_filename.Length} characters long. This exceeds the {MAX_PATH} character limit.");
+
+                            if (!_TestMode)
+                            {
+                                // Make sure we are clear for move.
+
+                                var file_attributes = File.GetAttributes(destination_filename);
+
+                                if (file_attributes != FileAttributes.Normal)
+                                    File.SetAttributes(destination_filename, FileAttributes.Normal);
+
+                                File.Copy(item, destination_filename, true);
+                            }
+
+                            LogMesage("Updating out of date file " + destination_filename);
+                        }
+                    }
+                    else
+                    {
+                        if (!_TestMode)
+                            File.Copy(item, destination_filename);
+
+                        LogMesage("Copying " + destination_filename);
+                    }
+
+                    file_count++;
                 }
-                catch (Exception ex)
+            }
+
+            // remove any directories that exist in the destination but not in the source
+            // need to check for existance beacuse in test mode, new directories will not be created.
+            if (Directory.Exists(destinationDirectory))
+            {
+                foreach (string directory in Directory.GetDirectories(destinationDirectory))
                 {
-                    LogMesage("Error processing : " + ex.Message);
-                    LogMesage("Halting synchronization.");
+                    string source = directory.Replace(destinationRoot, sourceRoot);
+
+                    if (!Directory.Exists(source))
+                    {
+                        LogMesage("Deleting " + directory);
+
+                        if (!_TestMode)
+                        {
+                            DirectoryInfo di = new DirectoryInfo(directory);
+                            RemoveFileAttributes(directory, true);
+                            di.Delete(true);
+                        }
+                    }
                 }
             }
 
-            private void btnSelectSource_Click(object sender, EventArgs e)
+            string[] directory_list = Directory.GetDirectories(sourceDirectory);
+
+            //// call function recursively on subdirectories
+            //foreach (var item in directory_list)    
+            //{
+            //    string destination = destination_root + item.Replace(source_root, string.Empty);
+            //    SyncDirectory(source_root, destination_root ,item, destination);
+            //}
+
+            Parallel.ForEach(directory_list, new ParallelOptions { MaxDegreeOfParallelism = 4 }, current_directory =>
             {
-                FolderBrowserDialog folder_picker       = new FolderBrowserDialog();
-                folder_picker.RootFolder                = Environment.SpecialFolder.MyComputer;
-                folder_picker.Description               = "Please select the source folder.";
+                string destination = destinationRoot + current_directory.Replace(sourceRoot, string.Empty);
+                SyncDirectory(sourceRoot, destinationRoot, current_directory, destination);
+            });
 
-                if (this.txtSourceDir.Text != string.Empty)
-                    folder_picker.SelectedPath = this.txtSourceDir.Text;
+            LogMesage($"Sync of directory {sourceDirectory} complete.", true);
+            UpdateProgress(file_count);
+        }
 
-                DialogResult result = folder_picker.ShowDialog();
+        protected long GetTotalFreeSpace(string driveName)
+        {
+            if (string.IsNullOrWhiteSpace(driveName))
+                throw new ArgumentException("Drive name cannot be null or empty");
 
-                if (result == DialogResult.OK)
-                      this.txtSourceDir.Text = folder_picker.SelectedPath;
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                if (drive.IsReady && drive.Name == driveName)
+                {
+                    return drive.AvailableFreeSpace;
+                }
             }
 
-            private void btnDestination_Click(object sender, EventArgs e)
+            throw new Exception($"Found no drives named '{driveName}'");
+        }
+
+        protected long GetTotalDirectorySize(string directoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath))
+                throw new ArgumentException("Directory path cannot be null or empty");
+
+            if (!Directory.Exists(directoryPath))
+                throw new ArgumentException($"Directory '{directoryPath}' does not exist");
+
+            var directoryInfo = new DirectoryInfo(directoryPath);
+            return GetDirectorySize(directoryInfo, true);
+        }
+
+        protected long GetDirectorySize(DirectoryInfo directoryInfo, bool recursive = true)
+        {
+            if (directoryInfo == null)
+                throw new ArgumentException("Directory info cannot be null");
+
+            long total_size = 0;
+
+            foreach (var fileInfo in directoryInfo.GetFiles())
+                Interlocked.Add(ref total_size, fileInfo.Length);
+
+            if (recursive)
+                Parallel.ForEach(directoryInfo.GetDirectories(), (subDirectory) => Interlocked.Add(ref total_size, GetDirectorySize(subDirectory, recursive)));
+
+            return total_size;
+        }
+
+        protected void UpdateProgress(int amount)
+        {
+            if (this.pbFiles.InvokeRequired)
             {
-                FolderBrowserDialog folder_picker       = new FolderBrowserDialog();
-                folder_picker.RootFolder                = Environment.SpecialFolder.MyComputer;
-                folder_picker.Description               = "Please select the destination folder.";
-
-                DialogResult result = folder_picker.ShowDialog();
-
-                if (result == DialogResult.OK)
-                    this.txtDestinationDir.Text = folder_picker.SelectedPath;
+                UpdateProgressBar delegate_call = new UpdateProgressBar(UpdateProgress);
+                this.Invoke(delegate_call, new object[] { amount });
             }
-
-            private void btnClearLog_Click(object sender, EventArgs e)
+            else
             {
-                _MessageLog = null;
-                LogMesage("Log Cleared.");
+                this.pbFiles.Step = amount;
+                this.pbFiles.PerformStep();
+
+                Console.WriteLine("Amount: " + amount.ToString());
+            }
+        }
+
+        protected void LogMesage(string message)
+        {
+            LogMesage(message, false);
+        }
+
+        protected void LogMesage(string message, bool flushLog)
+        {
+            if (_MessageLog == null)
+                _MessageLog = new StringBuilder();
+
+            // only update UI every several seconds
+
+            if (this.txtLog.InvokeRequired)
+            {
+                SetTextCallback delegate_call = new SetTextCallback(LogMesage);
+                this.Invoke(delegate_call, new object[] { message, flushLog });
+            }
+            else
+            {
+                _MessageLog.AppendLine($"<{DateTime.Now.ToLongTimeString()}> {message}");
+
+                if (!_Timer.IsRunning)
+                {
+                    this.txtLog.Text = _MessageLog.ToString();
+                }
+                else if (_Timer.ElapsedMilliseconds > 5000 || flushLog)
+                {
+                    this.txtLog.Text = _MessageLog.ToString();
+
+                    _Timer.Restart();
+                    _MessageLog.Clear();
+                }
+            }
+        }
+
+        protected void SetTestMode()
+        {
+            _TestMode = this.chkTestMode.Checked;
+
+            if (_TestMode)
+                LogMesage("Test mode is ON: No updates will be made.");
+            else
+                LogMesage("Test mode is OFF: Updates will be made normally.");
+        }
+
+
+        public frmMain()
+        {
+            InitializeComponent();
+
+            this.Text = "Jolly Roger's Directory Sync";
+            this.btnSync.Enabled = false;
+            this.btnCancel.Enabled = false;
+            this.lblAbout.Text = "Written by Roger Hill, 2011";
+
+            //_MessageWindow          = this.txtLog;
+            _MainForm = this;
+            _Timer = new Stopwatch();
+
+            LogMesage("Jolly Roger's Directory Sync, Version " + Application.ProductVersion);
+            LogMesage("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.");
+
+            SetTestMode();
+        }
+
+        private async void btnSync_Click(object sender, EventArgs e)
+        {
+            _HaltProcessing = false;
+
+            try
+            {
+                this.pbFiles.Maximum = CountFiles(this.txtSourceDir.Text);
                 this.pbFiles.Value = 0;
+
+                await Task.Run(() =>
+                {
+                    SyncDirectory(this.txtSourceDir.Text, this.txtDestinationDir.Text);
+                });
             }
-
-            private void btnCancel_Click(object sender, EventArgs e)
+            catch (Exception ex)
             {
-                if (!_HaltProcessing)
-                { 
-                    _HaltProcessing = true;
-                    LogMesage("Attempting to halt synchronization...");
-                }
+                LogMesage("Error processing : " + ex.Message);
+                LogMesage("Halting synchronization.");
             }
+        }
 
-            private void txtSourceDir_TextChanged(object sender, EventArgs e)
+        private void btnSelectSource_Click(object sender, EventArgs e)
+        {
+            FolderBrowserDialog folder_picker = new FolderBrowserDialog();
+            folder_picker.RootFolder = Environment.SpecialFolder.MyComputer;
+            folder_picker.Description = "Please select the source folder.";
+
+            if (this.txtSourceDir.Text != string.Empty)
+                folder_picker.SelectedPath = this.txtSourceDir.Text;
+
+            DialogResult result = folder_picker.ShowDialog();
+
+            if (result == DialogResult.OK)
+                this.txtSourceDir.Text = folder_picker.SelectedPath;
+        }
+
+        private void btnDestination_Click(object sender, EventArgs e)
+        {
+            FolderBrowserDialog folder_picker = new FolderBrowserDialog();
+            folder_picker.RootFolder = Environment.SpecialFolder.MyComputer;
+            folder_picker.Description = "Please select the destination folder.";
+
+            DialogResult result = folder_picker.ShowDialog();
+
+            if (result == DialogResult.OK)
+                this.txtDestinationDir.Text = folder_picker.SelectedPath;
+        }
+
+        private void btnClearLog_Click(object sender, EventArgs e)
+        {
+            _MessageLog = null;
+            LogMesage("Log Cleared.");
+            this.pbFiles.Value = 0;
+        }
+
+        private void btnCancel_Click(object sender, EventArgs e)
+        {
+            if (!_HaltProcessing)
             {
-                bool ready_to_sync      = (this.txtDestinationDir.Text.Length > 0) && (this.txtSourceDir.Text.Length > 0);
-
-                this.btnSync.Enabled    = ready_to_sync;
-                this.btnCancel.Enabled  = ready_to_sync;
+                _HaltProcessing = true;
+                LogMesage("Attempting to halt synchronization...");
             }
+        }
 
-            private void txtDestinationDir_TextChanged(object sender, EventArgs e)
-            {
-                bool ready_to_sync      = (this.txtDestinationDir.Text.Length > 0) && (this.txtSourceDir.Text.Length > 0);
+        private void txtSourceDir_TextChanged(object sender, EventArgs e)
+        {
+            bool ready_to_sync = (this.txtDestinationDir.Text.Length > 0) && (this.txtSourceDir.Text.Length > 0);
 
-                this.btnSync.Enabled    = ready_to_sync;
-                this.btnCancel.Enabled  = ready_to_sync;
-            }
+            this.btnSync.Enabled = ready_to_sync;
+            this.btnCancel.Enabled = ready_to_sync;
+        }
 
-            private void chkTestMode_CheckedChanged(object sender, EventArgs e)
-            {
-                SetTestMode();
-            }        
+        private void txtDestinationDir_TextChanged(object sender, EventArgs e)
+        {
+            bool ready_to_sync = (this.txtDestinationDir.Text.Length > 0) && (this.txtSourceDir.Text.Length > 0);
 
-        #endregion
+            this.btnSync.Enabled = ready_to_sync;
+            this.btnCancel.Enabled = ready_to_sync;
+        }
+
+        private void chkTestMode_CheckedChanged(object sender, EventArgs e)
+        {
+            SetTestMode();
+        }
     }
 }
