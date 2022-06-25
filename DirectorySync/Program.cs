@@ -1,20 +1,23 @@
-﻿using System;
-using System.Threading;
-using System.Windows.Forms;
-
-namespace DirectoryCopy
+namespace DirectorySync
 {
-    static class Program
+    internal static class Program
     {
+        /// <summary>
+        ///  The main entry point for the application.
+        /// </summary>
         [STAThread]
         static void Main()
         {
+            // To customize application configuration such as set high DPI settings or default font,
+            // see https://aka.ms/applicationconfiguration.
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += ApplicationThreadException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
 
+            ApplicationConfiguration.Initialize();
             Application.Run(new frmMain());
         }
 

@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace DirectoryCopy
+namespace DirectorySync
 {
     public partial class frmMain : Form
     {
@@ -21,22 +21,21 @@ namespace DirectoryCopy
         protected Form _MainForm;
         protected Stopwatch _Timer;
 
-
         protected bool ValidatePaths()
         {
-            if (!Directory.Exists(this.txtSourceDir.Text))
+            if (!Directory.Exists(txtSourceDir.Text))
             {
                 LogMesage("Error: Source directory does not exist.");
                 return false;
             }
 
-            if (!Directory.Exists(this.txtDestinationDir.Text))
+            if (!Directory.Exists(txtDestinationDir.Text))
             {
                 LogMesage("Error: Destination directory does not exist.");
                 return false;
             }
 
-            if (this.txtSourceDir.Text == this.txtDestinationDir.Text)
+            if (txtSourceDir.Text == txtDestinationDir.Text)
             {
                 LogMesage("Error: Source directory and destination directory must be different.");
                 return false;
@@ -47,10 +46,10 @@ namespace DirectoryCopy
 
         protected void RemoveFileAttributes(string directory, bool recursive)
         {
-            DirectoryInfo directory_info = new DirectoryInfo(directory);
+            var directoryInfo = new DirectoryInfo(directory);
 
-            if (directory_info.Attributes != FileAttributes.Normal)
-                directory_info.Attributes = FileAttributes.Normal;
+            if (directoryInfo.Attributes != FileAttributes.Normal)
+                directoryInfo.Attributes = FileAttributes.Normal;
 
             string[] files = Directory.GetFiles(directory);
 
@@ -66,7 +65,7 @@ namespace DirectoryCopy
             }
         }
 
-        protected int CountFiles(string startingDirectory)
+        protected static int CountFiles(string startingDirectory)
         {
             if (string.IsNullOrWhiteSpace(startingDirectory))
                 throw new ArgumentException("Directory path cannot be null or empty");
@@ -106,7 +105,7 @@ namespace DirectoryCopy
 
                 long source_size = GetTotalDirectorySize(sourceDirectory);
                 long destination_size = GetTotalDirectorySize(destinationDirectory);
-                long free_space = GetTotalFreeSpace(drive_root);
+                long free_space = GetTotalFreeSpace(drive_root!);
 
                 if (source_size > (destination_size + free_space))
                 {
@@ -228,7 +227,7 @@ namespace DirectoryCopy
 
                         if (!_TestMode)
                         {
-                            DirectoryInfo di = new DirectoryInfo(directory);
+                            var di = new DirectoryInfo(directory);
                             RemoveFileAttributes(directory, true);
                             di.Delete(true);
                         }
@@ -255,10 +254,10 @@ namespace DirectoryCopy
             UpdateProgress(file_count);
         }
 
-        protected long GetTotalFreeSpace(string driveName)
+        protected static long GetTotalFreeSpace(string driveName)
         {
             if (string.IsNullOrWhiteSpace(driveName))
-                throw new ArgumentException("Drive name cannot be null or empty");
+                throw new ArgumentNullException(nameof(driveName));
 
             foreach (DriveInfo drive in DriveInfo.GetDrives())
             {
@@ -286,7 +285,7 @@ namespace DirectoryCopy
         protected long GetDirectorySize(DirectoryInfo directoryInfo, bool recursive = true)
         {
             if (directoryInfo == null)
-                throw new ArgumentException("Directory info cannot be null");
+                throw new ArgumentNullException(nameof(directoryInfo));
 
             long total_size = 0;
 
@@ -301,15 +300,15 @@ namespace DirectoryCopy
 
         protected void UpdateProgress(int amount)
         {
-            if (this.pbFiles.InvokeRequired)
+            if (pbFiles.InvokeRequired)
             {
-                UpdateProgressBar delegate_call = new UpdateProgressBar(UpdateProgress);
-                this.Invoke(delegate_call, new object[] { amount });
+                var delegate_call = new UpdateProgressBar(UpdateProgress);
+                Invoke(delegate_call, new object[] { amount });
             }
             else
             {
-                this.pbFiles.Step = amount;
-                this.pbFiles.PerformStep();
+                pbFiles.Step = amount;
+                pbFiles.PerformStep();
 
                 Console.WriteLine("Amount: " + amount.ToString());
             }
@@ -322,15 +321,12 @@ namespace DirectoryCopy
 
         protected void LogMesage(string message, bool flushLog)
         {
-            if (_MessageLog == null)
-                _MessageLog = new StringBuilder();
-
             // only update UI every several seconds
 
-            if (this.txtLog.InvokeRequired)
+            if (txtLog.InvokeRequired)
             {
-                SetTextCallback delegate_call = new SetTextCallback(LogMesage);
-                this.Invoke(delegate_call, new object[] { message, flushLog });
+                var delegate_call = new SetTextCallback(LogMesage);
+                Invoke(delegate_call, new object[] { message, flushLog });
             }
             else
             {
@@ -338,11 +334,11 @@ namespace DirectoryCopy
 
                 if (!_Timer.IsRunning)
                 {
-                    this.txtLog.Text = _MessageLog.ToString();
+                    txtLog.Text = _MessageLog.ToString();
                 }
                 else if (_Timer.ElapsedMilliseconds > 5000 || flushLog)
                 {
-                    this.txtLog.Text = _MessageLog.ToString();
+                    txtLog.Text = _MessageLog.ToString();
 
                     _Timer.Restart();
                     _MessageLog.Clear();
@@ -352,7 +348,7 @@ namespace DirectoryCopy
 
         protected void SetTestMode()
         {
-            _TestMode = this.chkTestMode.Checked;
+            _TestMode = chkTestMode.Checked;
 
             if (_TestMode)
                 LogMesage("Test mode is ON: No updates will be made.");
@@ -365,14 +361,14 @@ namespace DirectoryCopy
         {
             InitializeComponent();
 
-            this.Text = "Jolly Roger's Directory Sync";
-            this.btnSync.Enabled = false;
-            this.btnCancel.Enabled = false;
-            this.lblAbout.Text = "Written by Roger Hill, 2011";
+            Text = "Jolly Roger's Directory Sync";
+            btnSync.Enabled = false;
+            btnCancel.Enabled = false;
+            lblAbout.Text = "Written by Roger Hill, 2011";
 
-            //_MessageWindow          = this.txtLog;
             _MainForm = this;
             _Timer = new Stopwatch();
+            _MessageLog = new StringBuilder();
 
             LogMesage("Jolly Roger's Directory Sync, Version " + Application.ProductVersion);
             LogMesage("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.");
@@ -386,12 +382,12 @@ namespace DirectoryCopy
 
             try
             {
-                this.pbFiles.Maximum = CountFiles(this.txtSourceDir.Text);
-                this.pbFiles.Value = 0;
+                pbFiles.Maximum = CountFiles(txtSourceDir.Text);
+                pbFiles.Value = 0;
 
                 await Task.Run(() =>
                 {
-                    SyncDirectory(this.txtSourceDir.Text, this.txtDestinationDir.Text);
+                    SyncDirectory(txtSourceDir.Text, txtDestinationDir.Text);
                 });
             }
             catch (Exception ex)
@@ -403,24 +399,28 @@ namespace DirectoryCopy
 
         private void btnSelectSource_Click(object sender, EventArgs e)
         {
-            FolderBrowserDialog folder_picker = new FolderBrowserDialog();
-            folder_picker.RootFolder = Environment.SpecialFolder.MyComputer;
-            folder_picker.Description = "Please select the source folder.";
+            var folderPicker = new FolderBrowserDialog
+            {
+                RootFolder = Environment.SpecialFolder.MyComputer,
+                Description = "Please select the source folder."
+            };
 
-            if (this.txtSourceDir.Text != string.Empty)
-                folder_picker.SelectedPath = this.txtSourceDir.Text;
+            if (txtSourceDir.Text != string.Empty)
+                folderPicker.SelectedPath = txtSourceDir.Text;
 
-            DialogResult result = folder_picker.ShowDialog();
+            DialogResult result = folderPicker.ShowDialog();
 
             if (result == DialogResult.OK)
-                this.txtSourceDir.Text = folder_picker.SelectedPath;
+                txtSourceDir.Text = folderPicker.SelectedPath;
         }
 
         private void btnDestination_Click(object sender, EventArgs e)
         {
-            FolderBrowserDialog folder_picker = new FolderBrowserDialog();
-            folder_picker.RootFolder = Environment.SpecialFolder.MyComputer;
-            folder_picker.Description = "Please select the destination folder.";
+            var folder_picker = new FolderBrowserDialog
+            {
+                RootFolder = Environment.SpecialFolder.MyComputer,
+                Description = "Please select the destination folder."
+            };
 
             DialogResult result = folder_picker.ShowDialog();
 
@@ -430,9 +430,9 @@ namespace DirectoryCopy
 
         private void btnClearLog_Click(object sender, EventArgs e)
         {
-            _MessageLog = null;
+            _MessageLog.Clear();
             LogMesage("Log Cleared.");
-            this.pbFiles.Value = 0;
+            pbFiles.Value = 0;
         }
 
         private void btnCancel_Click(object sender, EventArgs e)
@@ -446,7 +446,7 @@ namespace DirectoryCopy
 
         private void txtSourceDir_TextChanged(object sender, EventArgs e)
         {
-            bool ready_to_sync = (this.txtDestinationDir.Text.Length > 0) && (this.txtSourceDir.Text.Length > 0);
+            bool ready_to_sync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
 
             this.btnSync.Enabled = ready_to_sync;
             this.btnCancel.Enabled = ready_to_sync;
@@ -454,7 +454,7 @@ namespace DirectoryCopy
 
         private void txtDestinationDir_TextChanged(object sender, EventArgs e)
         {
-            bool ready_to_sync = (this.txtDestinationDir.Text.Length > 0) && (this.txtSourceDir.Text.Length > 0);
+            bool ready_to_sync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
 
             this.btnSync.Enabled = ready_to_sync;
             this.btnCancel.Enabled = ready_to_sync;

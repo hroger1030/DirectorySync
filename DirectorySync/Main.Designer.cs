@@ -1,4 +1,4 @@
-﻿namespace DirectoryCopy
+﻿namespace DirectorySync
 {
     partial class frmMain
     {
@@ -47,9 +47,10 @@
             // btnSync
             // 
             this.btnSync.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnSync.Location = new System.Drawing.Point(287, 238);
+            this.btnSync.Location = new System.Drawing.Point(383, 366);
+            this.btnSync.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.btnSync.Name = "btnSync";
-            this.btnSync.Size = new System.Drawing.Size(131, 23);
+            this.btnSync.Size = new System.Drawing.Size(175, 35);
             this.btnSync.TabIndex = 0;
             this.btnSync.Text = "Syncronize Directories";
             this.btnSync.UseVisualStyleBackColor = true;
@@ -59,27 +60,30 @@
             // 
             this.txtSourceDir.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtSourceDir.Location = new System.Drawing.Point(128, 12);
+            this.txtSourceDir.Location = new System.Drawing.Point(171, 18);
+            this.txtSourceDir.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.txtSourceDir.Name = "txtSourceDir";
-            this.txtSourceDir.Size = new System.Drawing.Size(335, 20);
+            this.txtSourceDir.Size = new System.Drawing.Size(445, 27);
             this.txtSourceDir.TabIndex = 1;
             this.txtSourceDir.TextChanged += new System.EventHandler(this.txtSourceDir_TextChanged);
             // 
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(31, 15);
+            this.label1.Location = new System.Drawing.Point(41, 23);
+            this.label1.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(89, 13);
+            this.label1.Size = new System.Drawing.Size(122, 20);
             this.label1.TabIndex = 2;
             this.label1.Text = "Source Directory:";
             // 
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(12, 49);
+            this.label2.Location = new System.Drawing.Point(16, 75);
+            this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(108, 13);
+            this.label2.Size = new System.Drawing.Size(153, 20);
             this.label2.TabIndex = 3;
             this.label2.Text = "Destination Directory:";
             // 
@@ -87,18 +91,20 @@
             // 
             this.txtDestinationDir.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtDestinationDir.Location = new System.Drawing.Point(126, 46);
+            this.txtDestinationDir.Location = new System.Drawing.Point(168, 71);
+            this.txtDestinationDir.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.txtDestinationDir.Name = "txtDestinationDir";
-            this.txtDestinationDir.Size = new System.Drawing.Size(335, 20);
+            this.txtDestinationDir.Size = new System.Drawing.Size(445, 27);
             this.txtDestinationDir.TabIndex = 4;
             this.txtDestinationDir.TextChanged += new System.EventHandler(this.txtDestinationDir_TextChanged);
             // 
             // btnSelectSource
             // 
             this.btnSelectSource.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnSelectSource.Location = new System.Drawing.Point(469, 10);
+            this.btnSelectSource.Location = new System.Drawing.Point(625, 15);
+            this.btnSelectSource.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.btnSelectSource.Name = "btnSelectSource";
-            this.btnSelectSource.Size = new System.Drawing.Size(111, 23);
+            this.btnSelectSource.Size = new System.Drawing.Size(148, 35);
             this.btnSelectSource.TabIndex = 6;
             this.btnSelectSource.Text = "Select Source";
             this.btnSelectSource.UseVisualStyleBackColor = true;
@@ -107,9 +113,10 @@
             // btnDestination
             // 
             this.btnDestination.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnDestination.Location = new System.Drawing.Point(469, 44);
+            this.btnDestination.Location = new System.Drawing.Point(625, 68);
+            this.btnDestination.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.btnDestination.Name = "btnDestination";
-            this.btnDestination.Size = new System.Drawing.Size(111, 23);
+            this.btnDestination.Size = new System.Drawing.Size(148, 35);
             this.btnDestination.TabIndex = 7;
             this.btnDestination.Text = "Select Destination";
             this.btnDestination.UseVisualStyleBackColor = true;
@@ -118,9 +125,10 @@
             // btnClearLog
             // 
             this.btnClearLog.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnClearLog.Location = new System.Drawing.Point(505, 238);
+            this.btnClearLog.Location = new System.Drawing.Point(673, 366);
+            this.btnClearLog.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.btnClearLog.Name = "btnClearLog";
-            this.btnClearLog.Size = new System.Drawing.Size(75, 23);
+            this.btnClearLog.Size = new System.Drawing.Size(100, 35);
             this.btnClearLog.TabIndex = 9;
             this.btnClearLog.Text = "Clear Log";
             this.btnClearLog.UseVisualStyleBackColor = true;
@@ -131,18 +139,20 @@
             this.txtLog.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtLog.Location = new System.Drawing.Point(12, 80);
+            this.txtLog.Location = new System.Drawing.Point(16, 123);
+            this.txtLog.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.txtLog.Name = "txtLog";
-            this.txtLog.Size = new System.Drawing.Size(568, 118);
+            this.txtLog.Size = new System.Drawing.Size(756, 179);
             this.txtLog.TabIndex = 10;
             this.txtLog.Text = "";
             // 
             // lblAbout
             // 
             this.lblAbout.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.lblAbout.Location = new System.Drawing.Point(12, 243);
+            this.lblAbout.Location = new System.Drawing.Point(16, 374);
+            this.lblAbout.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblAbout.Name = "lblAbout";
-            this.lblAbout.Size = new System.Drawing.Size(186, 23);
+            this.lblAbout.Size = new System.Drawing.Size(248, 35);
             this.lblAbout.TabIndex = 11;
             this.lblAbout.Text = "Author Notice";
             // 
@@ -150,9 +160,10 @@
             // 
             this.chkTestMode.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.chkTestMode.AutoSize = true;
-            this.chkTestMode.Location = new System.Drawing.Point(204, 242);
+            this.chkTestMode.Location = new System.Drawing.Point(274, 374);
+            this.chkTestMode.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.chkTestMode.Name = "chkTestMode";
-            this.chkTestMode.Size = new System.Drawing.Size(77, 17);
+            this.chkTestMode.Size = new System.Drawing.Size(101, 24);
             this.chkTestMode.TabIndex = 12;
             this.chkTestMode.Text = "Test Mode";
             this.chkTestMode.UseVisualStyleBackColor = true;
@@ -161,9 +172,10 @@
             // btnCancel
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCancel.Location = new System.Drawing.Point(424, 238);
+            this.btnCancel.Location = new System.Drawing.Point(566, 366);
+            this.btnCancel.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.btnCancel.Name = "btnCancel";
-            this.btnCancel.Size = new System.Drawing.Size(75, 23);
+            this.btnCancel.Size = new System.Drawing.Size(100, 35);
             this.btnCancel.TabIndex = 13;
             this.btnCancel.Text = "Cancel";
             this.btnCancel.UseVisualStyleBackColor = true;
@@ -173,17 +185,18 @@
             // 
             this.pbFiles.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.pbFiles.Location = new System.Drawing.Point(12, 204);
+            this.pbFiles.Location = new System.Drawing.Point(16, 314);
+            this.pbFiles.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.pbFiles.Name = "pbFiles";
-            this.pbFiles.Size = new System.Drawing.Size(568, 28);
+            this.pbFiles.Size = new System.Drawing.Size(757, 43);
             this.pbFiles.Step = 1;
             this.pbFiles.TabIndex = 14;
             // 
             // frmMain
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(592, 273);
+            this.ClientSize = new System.Drawing.Size(789, 420);
             this.Controls.Add(this.pbFiles);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.chkTestMode);
@@ -198,7 +211,8 @@
             this.Controls.Add(this.txtSourceDir);
             this.Controls.Add(this.btnSync);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.MinimumSize = new System.Drawing.Size(600, 300);
+            this.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.MinimumSize = new System.Drawing.Size(794, 437);
             this.Name = "frmMain";
             this.Text = "Jolly Roger\'s Directory Sync";
             this.ResumeLayout(false);
