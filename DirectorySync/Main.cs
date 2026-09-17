@@ -364,7 +364,8 @@ namespace DirectorySync
 
         protected void LogMesage(string message, bool flushLog)
         {
-            // only update UI every several seconds
+            // batch UI updates every several seconds instead of touching txtLog per-message,
+            // but always append (never replace) so history survives across batches
 
             if (txtLog.InvokeRequired)
             {
@@ -375,18 +376,22 @@ namespace DirectorySync
             {
                 _MessageLog.AppendLine($"<{DateTime.Now.ToLongTimeString()}> {message}");
 
-                if (!_Timer.IsRunning)
+                if (!_Timer.IsRunning || _Timer.ElapsedMilliseconds > 5000 || flushLog)
                 {
-                    txtLog.Text = _MessageLog.ToString();
-                }
-                else if (_Timer.ElapsedMilliseconds > 5000 || flushLog)
-                {
-                    txtLog.Text = _MessageLog.ToString();
+                    txtLog.AppendText(_MessageLog.ToString());
+                    txtLog.SelectionStart = txtLog.TextLength;
+                    txtLog.ScrollToCaret();
 
                     _Timer.Restart();
                     _MessageLog.Clear();
                 }
             }
+        }
+
+        protected void ClearLog()
+        {
+            _MessageLog.Clear();
+            txtLog.Clear();
         }
 
         protected void SetTestMode()
@@ -423,6 +428,7 @@ namespace DirectorySync
         private async void btnSync_Click(object sender, EventArgs e)
         {
             _HaltProcessing = false;
+            ClearLog();
             ResetStatistics();
             _SyncTimer.Restart();
 
@@ -510,7 +516,7 @@ namespace DirectorySync
 
         private void btnClearLog_Click(object sender, EventArgs e)
         {
-            _MessageLog.Clear();
+            ClearLog();
             LogMesage("Log Cleared.");
             pbFiles.Value = 0;
         }
