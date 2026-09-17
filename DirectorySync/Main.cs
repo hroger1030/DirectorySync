@@ -23,32 +23,45 @@ namespace DirectorySync
 {
     public partial class frmMain : Form
     {
-        protected delegate void SetTextCallback(string text, bool flushLog);
-        protected delegate void UpdateProgressBar(int amount);
-
         private static readonly int MAX_PATH = 260;
+        private const int PROGRESS_BAR_SCALE = 10000;
+        private static readonly ParallelOptions _ParallelOptions = new ParallelOptions { MaxDegreeOfParallelism = 4 };
+        private readonly object _LogLock = new object();
+        private readonly object _ProgressLock = new object();
         protected StringBuilder _MessageLog;
         protected bool _TestMode;
         protected volatile bool _HaltProcessing;
         protected Form _MainForm;
         protected Stopwatch _Timer;
         protected Stopwatch _SyncTimer;
+        protected Stopwatch _ProgressTimer;
         private long _FilesCopied;
         private long _BytesCopied;
+        private long _BytesProcessed;
         private long _FilesRemoved;
         private long _FilesSkipped;
+        private long _Errors;
+        private long _TotalSourceBytes;
 
         protected bool ValidatePaths()
         {
             if (!Directory.Exists(txtSourceDir.Text))
             {
-                LogMesage("Error: Source directory does not exist.");
+                LogImportant("Error: Source directory does not exist.", Color.Red);
                 return false;
             }
 
-            if (!Directory.Exists(txtDestinationDir.Text))
+            // The destination itself doesn't need to exist yet — it's created lazily, right
+            // before the first file is written into it (see SyncDirectory), and never in Test
+            // Mode. We only need SOME existing ancestor, so free space can be checked against
+            // the real volume rather than trusting an unverified, possibly-bogus path string.
+            try
             {
-                LogMesage("Error: Destination directory does not exist.");
+                FindNearestExistingAncestor(txtDestinationDir.Text);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                LogImportant("Error: Destination path is not reachable (no existing parent directory found).", Color.Red);
                 return false;
             }
 
@@ -57,13 +70,13 @@ namespace DirectorySync
 
             if (string.Equals(sourceFull, destinationFull, StringComparison.OrdinalIgnoreCase))
             {
-                LogMesage("Error: Source directory and destination directory must be different.");
+                LogImportant("Error: Source directory and destination directory must be different.", Color.Red);
                 return false;
             }
 
             if (IsSubdirectoryOf(destinationFull, sourceFull) || IsSubdirectoryOf(sourceFull, destinationFull))
             {
-                LogMesage("Error: Source directory and destination directory cannot be nested inside one another.");
+                LogImportant("Error: Source directory and destination directory cannot be nested inside one another.", Color.Red);
                 return false;
             }
 
@@ -74,6 +87,22 @@ namespace DirectorySync
         {
             string parentWithSeparator = parent + Path.DirectorySeparatorChar;
             return candidateChild.StartsWith(parentWithSeparator, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Walks up from path until it finds a directory that actually exists, without ever
+        // creating anything. Used so a not-yet-created destination can still be checked for
+        // free space against its real volume, instead of requiring the exact path to exist.
+        private static string FindNearestExistingAncestor(string path)
+        {
+            string? current = Path.GetFullPath(path);
+
+            while (!string.IsNullOrEmpty(current) && !Directory.Exists(current))
+                current = Path.GetDirectoryName(current);
+
+            if (string.IsNullOrEmpty(current))
+                throw new DirectoryNotFoundException($"No existing parent directory could be found for '{path}'.");
+
+            return current;
         }
 
         protected void RemoveFileAttributes(string directory, bool recursive)
@@ -97,32 +126,78 @@ namespace DirectorySync
             }
         }
 
-        protected static int CountFiles(string startingDirectory)
+        protected static (int FileCount, long TotalBytes) GetDirectoryStats(string directoryPath)
         {
-            if (string.IsNullOrWhiteSpace(startingDirectory))
+            if (string.IsNullOrWhiteSpace(directoryPath))
                 throw new ArgumentException("Directory path cannot be null or empty");
 
-            if (!Directory.Exists(startingDirectory))
-                throw new ArgumentException($"Directory {startingDirectory} does not exist");
+            if (!Directory.Exists(directoryPath))
+                throw new ArgumentException($"Directory '{directoryPath}' does not exist");
 
-            int count = 0;
-            var workQueue = new Queue<string>();
+            int fileCount = 0;
+            long totalBytes = 0;
 
-            workQueue.Enqueue(startingDirectory);
-
-            while (workQueue.Count > 0)
+            void Walk(DirectoryInfo directoryInfo)
             {
-                string currentFiretory = workQueue.Dequeue();
+                FileInfo[] files;
+                DirectoryInfo[] subdirectories;
 
-                var buffer = Directory.GetDirectories(currentFiretory);
+                try
+                {
+                    files = directoryInfo.GetFiles();
+                    subdirectories = directoryInfo.GetDirectories();
+                }
+                catch (Exception)
+                {
+                    // Can't enumerate this directory (e.g. permission denied) — skip it for
+                    // this size/count estimate. The real sync will hit and report the same
+                    // problem, per-item, when it actually gets there.
+                    return;
+                }
 
-                foreach (var subdirectory in buffer)
-                    workQueue.Enqueue(subdirectory);
+                foreach (var fileInfo in files)
+                {
+                    Interlocked.Increment(ref fileCount);
+                    Interlocked.Add(ref totalBytes, fileInfo.Length);
+                }
 
-                count += Directory.GetFiles(currentFiretory).Length;
+                Parallel.ForEach(subdirectories, _ParallelOptions, Walk);
             }
 
-            return count;
+            Walk(new DirectoryInfo(directoryPath));
+
+            return (fileCount, totalBytes);
+        }
+
+        // Enumeration can fail just like any other file-system access (permission denied,
+        // path too long, device unavailable, ...). These let a single unreadable directory
+        // get logged and skipped instead of aborting everything above it in the tree.
+        protected string[] TryGetFiles(string directory)
+        {
+            try
+            {
+                return Directory.GetFiles(directory);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _Errors);
+                LogImportant($"Error listing files in '{directory}': {ex.Message}", Color.Red);
+                return Array.Empty<string>();
+            }
+        }
+
+        protected string[] TryGetDirectories(string directory)
+        {
+            try
+            {
+                return Directory.GetDirectories(directory);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _Errors);
+                LogImportant($"Error listing subdirectories in '{directory}': {ex.Message}", Color.Red);
+                return Array.Empty<string>();
+            }
         }
 
         protected async Task SyncDirectory(string sourceDirectory, string destinationDirectory)
@@ -133,17 +208,25 @@ namespace DirectorySync
 
                 LogMesage("Calculating avaialble space...", true);
 
-                var driveRoot = Path.GetPathRoot(destinationDirectory);
+                // The destination may not exist yet (it's created lazily, on write) — check free
+                // space against the nearest existing ancestor's volume instead of requiring the
+                // exact path to be there, and treat a not-yet-created destination as empty.
+                string existingDestinationAncestor = FindNearestExistingAncestor(destinationDirectory);
+                var driveRoot = Path.GetPathRoot(existingDestinationAncestor);
 
-                long sourceSize = GetTotalDirectorySize(sourceDirectory);
-                long destinationSize = GetTotalDirectorySize(destinationDirectory);
+                var sourceStats = GetDirectoryStats(sourceDirectory);
+                var destinationStats = Directory.Exists(destinationDirectory)
+                    ? GetDirectoryStats(destinationDirectory)
+                    : (FileCount: 0, TotalBytes: 0L);
                 long freeSpace = GetTotalFreeSpace(driveRoot!);
 
-                if (sourceSize > (destinationSize + freeSpace))
+                if (sourceStats.TotalBytes > (destinationStats.TotalBytes + freeSpace))
                 {
-                    LogMesage($"Cannot copy files, not enought space avaialble on '{driveRoot}'", true);
+                    LogImportant($"Cannot copy files, not enought space avaialble on '{driveRoot}'", Color.Red);
                     return;
                 }
+
+                ResetProgress(sourceStats.TotalBytes);
 
                 LogMesage("Sufficent space avaialble, beginning Synchronization.", true);
 
@@ -153,9 +236,14 @@ namespace DirectorySync
                 });
 
                 if (_HaltProcessing)
+                {
                     LogMesage("Synchronization halted.", true);
+                }
                 else
-                    LogMesage("Synchronization complete.", true);
+                {
+                    LogImportant("Synchronization complete.", Color.DarkGreen);
+                    SetProgressValue(PROGRESS_BAR_SCALE);
+                }
 
                 _Timer.Stop();
             }
@@ -166,8 +254,6 @@ namespace DirectorySync
             if (_HaltProcessing == true)
                 return;
 
-            int fileCount = 0;
-
             LogMesage($"Starting sync of directory {sourceDirectory}.");
 
             if (!Directory.Exists(destinationDirectory))
@@ -175,91 +261,140 @@ namespace DirectorySync
                 LogMesage("Creating " + destinationDirectory);
 
                 if (!_TestMode)
-                    Directory.CreateDirectory(destinationDirectory);
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(destinationDirectory);
+                    }
+                    catch (Exception ex)
+                    {
+                        Interlocked.Increment(ref _Errors);
+                        LogImportant($"Error creating directory '{destinationDirectory}': {ex.Message}", Color.Red);
+                        return;
+                    }
+                }
             }
 
-            // remove non-existing files. Look at each file in the destination directory and if a 
+            // remove non-existing files. Look at each file in the destination directory and if a
             // matching file does not exist in the source directory remove it.
             if (Directory.Exists(destinationDirectory))
             {
-                foreach (string file in Directory.GetFiles(destinationDirectory))
+                Parallel.ForEach(TryGetFiles(destinationDirectory), _ParallelOptions, (file, state) =>
                 {
-                    string sourceFilename = Path.Combine(sourceDirectory, Path.GetFileName(file));
-
-                    if (!File.Exists(sourceFilename))
+                    if (_HaltProcessing)
                     {
-                        if (!_TestMode)
-                        {
-                            var fileAttributes = File.GetAttributes(file);
-
-                            if (fileAttributes != FileAttributes.Normal)
-                                File.SetAttributes(file, FileAttributes.Normal);
-
-                            File.Delete(file);
-                            Interlocked.Increment(ref _FilesRemoved);
-                        }
-
-                        LogMesage("Deleting " + file);
+                        state.Stop();
+                        return;
                     }
-                }
-            }
 
-            // copy files.  
-            // If the file exists and doesn't match the last write time, overwrite                
-            if (Directory.Exists(sourceDirectory))
-            {
-                foreach (string item in Directory.GetFiles(sourceDirectory))
-                {
-                    string destinationFilename = Path.Combine(destinationDirectory, Path.GetFileName(item));
-
-                    if (destinationFilename.Length > MAX_PATH)
-                        LogMesage($"Path '{destinationFilename}' is {destinationFilename.Length} characters long. This exceeds the {MAX_PATH} character limit.");
-
-                    if (File.Exists(destinationFilename))
+                    try
                     {
-                        if (File.GetLastWriteTime(item) != File.GetLastWriteTime(destinationFilename))
+                        string sourceFilename = Path.Combine(sourceDirectory, Path.GetFileName(file));
+
+                        if (!File.Exists(sourceFilename))
                         {
                             if (!_TestMode)
                             {
-                                // Make sure we are clear for move.
-
-                                var fileAttributes = File.GetAttributes(destinationFilename);
+                                var fileAttributes = File.GetAttributes(file);
 
                                 if (fileAttributes != FileAttributes.Normal)
-                                    File.SetAttributes(destinationFilename, FileAttributes.Normal);
+                                    File.SetAttributes(file, FileAttributes.Normal);
 
-                                File.Copy(item, destinationFilename, true);
+                                File.Delete(file);
+                                Interlocked.Increment(ref _FilesRemoved);
                             }
 
-                            Interlocked.Increment(ref _FilesCopied);
-                            Interlocked.Add(ref _BytesCopied, new FileInfo(item).Length);
-                            LogMesage("Updating out of date file " + destinationFilename);
+                            LogMesage("Deleting " + file);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Interlocked.Increment(ref _Errors);
+                        LogImportant($"Error deleting '{file}': {ex.Message}", Color.Red);
+                    }
+                });
+            }
+
+            // copy files.
+            // If the file exists and doesn't match the last write time, overwrite
+            if (Directory.Exists(sourceDirectory))
+            {
+                Parallel.ForEach(TryGetFiles(sourceDirectory), _ParallelOptions, (item, state) =>
+                {
+                    if (_HaltProcessing)
+                    {
+                        state.Stop();
+                        return;
+                    }
+
+                    string destinationFilename = Path.Combine(destinationDirectory, Path.GetFileName(item));
+                    long itemLength = 0;
+
+                    try
+                    {
+                        itemLength = new FileInfo(item).Length;
+
+                        if (destinationFilename.Length > MAX_PATH)
+                            LogMesage($"Path '{destinationFilename}' is {destinationFilename.Length} characters long. This exceeds the {MAX_PATH} character limit.");
+
+                        if (File.Exists(destinationFilename))
+                        {
+                            if (File.GetLastWriteTime(item) != File.GetLastWriteTime(destinationFilename))
+                            {
+                                if (!_TestMode)
+                                {
+                                    // Make sure we are clear for move.
+
+                                    var fileAttributes = File.GetAttributes(destinationFilename);
+
+                                    if (fileAttributes != FileAttributes.Normal)
+                                        File.SetAttributes(destinationFilename, FileAttributes.Normal);
+
+                                    File.Copy(item, destinationFilename, true);
+                                }
+
+                                Interlocked.Increment(ref _FilesCopied);
+                                Interlocked.Add(ref _BytesCopied, itemLength);
+                                LogMesage("Updating out of date file " + destinationFilename);
+                            }
+                            else
+                            {
+                                Interlocked.Increment(ref _FilesSkipped);
+                            }
                         }
                         else
                         {
-                            Interlocked.Increment(ref _FilesSkipped);
+                            if (!_TestMode)
+                                File.Copy(item, destinationFilename);
+
+                            Interlocked.Increment(ref _FilesCopied);
+                            Interlocked.Add(ref _BytesCopied, itemLength);
+                            LogMesage("Copying " + destinationFilename);
                         }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        if (!_TestMode)
-                            File.Copy(item, destinationFilename);
-
-                        Interlocked.Increment(ref _FilesCopied);
-                        Interlocked.Add(ref _BytesCopied, new FileInfo(item).Length);
-                        LogMesage("Copying " + destinationFilename);
+                        Interlocked.Increment(ref _Errors);
+                        LogImportant($"Error copying '{item}' to '{destinationFilename}': {ex.Message}", Color.Red);
                     }
 
-                    fileCount++;
-                }
+                    // Track progress by bytes of source examined (copied, skipped, or failed), not
+                    // file count — a byte-weighted ratio reflects actual completion far better than
+                    // "N of M files" when file sizes vary wildly, and a failed file still needs to
+                    // count so the bar doesn't stall waiting for bytes that will never land.
+                    AddProgress(itemLength);
+                });
             }
 
             // remove any directories that exist in the destination but not in the source
             // need to check for existance beacuse in test mode, new directories will not be created.
             if (Directory.Exists(destinationDirectory))
             {
-                foreach (string directory in Directory.GetDirectories(destinationDirectory))
+                foreach (string directory in TryGetDirectories(destinationDirectory))
                 {
+                    if (_HaltProcessing)
+                        break;
+
                     string source = Path.Combine(sourceRoot, Path.GetRelativePath(destinationRoot, directory));
 
                     if (!Directory.Exists(source))
@@ -268,31 +403,37 @@ namespace DirectorySync
 
                         if (!_TestMode)
                         {
-                            var di = new DirectoryInfo(directory);
-                            RemoveFileAttributes(directory, true);
-                            di.Delete(true);
+                            try
+                            {
+                                var di = new DirectoryInfo(directory);
+                                RemoveFileAttributes(directory, true);
+                                di.Delete(true);
+                            }
+                            catch (Exception ex)
+                            {
+                                Interlocked.Increment(ref _Errors);
+                                LogImportant($"Error deleting directory '{directory}': {ex.Message}", Color.Red);
+                            }
                         }
                     }
                 }
             }
 
-            string[] directoryList = Directory.GetDirectories(sourceDirectory);
+            var directoryList = TryGetDirectories(sourceDirectory);
 
-            //// call function recursively on subdirectories
-            //foreach (var item in directoryList)
-            //{
-            //    string destination = destinationRoot + item.Replace(sourceRoot, string.Empty);
-            //    SyncDirectory(sourceRoot, destinationRoot ,item, destination);
-            //}
-
-            Parallel.ForEach(directoryList, new ParallelOptions { MaxDegreeOfParallelism = 4 }, currentDirectory =>
+            Parallel.ForEach(directoryList, _ParallelOptions, (currentDirectory, state) =>
             {
-                string destination = Path.Combine(destinationRoot, Path.GetRelativePath(sourceRoot, currentDirectory));
+                if (_HaltProcessing)
+                {
+                    state.Stop();
+                    return;
+                }
+
+                var destination = Path.Combine(destinationRoot, Path.GetRelativePath(sourceRoot, currentDirectory));
                 SyncDirectory(sourceRoot, destinationRoot, currentDirectory, destination);
             });
 
             LogMesage($"Sync of directory {sourceDirectory} complete.", true);
-            UpdateProgress(fileCount);
         }
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto, SetLastError = true)]
@@ -311,50 +452,51 @@ namespace DirectorySync
             return (long)freeBytesAvailable;
         }
 
-        protected long GetTotalDirectorySize(string directoryPath)
+        protected void ResetProgress(long totalSourceBytes)
         {
-            if (string.IsNullOrWhiteSpace(directoryPath))
-                throw new ArgumentException("Directory path cannot be null or empty");
+            _TotalSourceBytes = totalSourceBytes;
+            Interlocked.Exchange(ref _BytesProcessed, 0);
+            _ProgressTimer.Reset();
 
-            if (!Directory.Exists(directoryPath))
-                throw new ArgumentException($"Directory '{directoryPath}' does not exist");
-
-            var directoryInfo = new DirectoryInfo(directoryPath);
-            return GetDirectorySize(directoryInfo, true);
+            SetProgressValue(0);
         }
 
-        protected long GetDirectorySize(DirectoryInfo directoryInfo, bool recursive = true)
+        protected void AddProgress(long bytes)
         {
-            if (directoryInfo == null)
-                throw new ArgumentNullException(nameof(directoryInfo));
+            Interlocked.Add(ref _BytesProcessed, bytes);
 
-            long totalSize = 0;
+            // Decide whether to flush, and compute the value to show, entirely under the lock
+            // (cheap, safe from any thread). Only the actual UI write below gets marshaled,
+            // and only when a flush is actually due — most calls return here for free.
+            int? progressValue = null;
 
-            foreach (var fileInfo in directoryInfo.GetFiles())
-                Interlocked.Add(ref totalSize, fileInfo.Length);
+            lock (_ProgressLock)
+            {
+                if (!_ProgressTimer.IsRunning || _ProgressTimer.ElapsedMilliseconds > 200)
+                {
+                    long processed = Interlocked.Read(ref _BytesProcessed);
+                    double ratio = _TotalSourceBytes > 0 ? Math.Min(1.0, processed / (double)_TotalSourceBytes) : 1.0;
+                    progressValue = (int)(ratio * PROGRESS_BAR_SCALE);
 
-            if (recursive)
-                Parallel.ForEach(directoryInfo.GetDirectories(), (subDirectory) => Interlocked.Add(ref totalSize, GetDirectorySize(subDirectory, recursive)));
+                    _ProgressTimer.Restart();
+                }
+            }
 
-            return totalSize;
+            if (progressValue != null)
+                SetProgressValue(progressValue.Value);
         }
 
-        protected void UpdateProgress(int amount)
+        protected void SetProgressValue(int value)
         {
             if (pbFiles.InvokeRequired)
             {
-                var delegateCall = new UpdateProgressBar(UpdateProgress);
-                Invoke(delegateCall, new object[] { amount });
+                Invoke(new Action<int>(SetProgressValue), value);
+                return;
             }
-            else
-            {
-                pbFiles.Step = amount;
-                pbFiles.PerformStep();
 
-                UpdateStatistics();
-
-                Console.WriteLine("Amount: " + amount.ToString());
-            }
+            pbFiles.Value = value;
+            lblProgressPercent.Text = (value / 100.0).ToString("0.0") + "%";
+            UpdateStatistics();
         }
 
         protected void LogMesage(string message)
@@ -364,33 +506,85 @@ namespace DirectorySync
 
         protected void LogMesage(string message, bool flushLog)
         {
-            // batch UI updates every several seconds instead of touching txtLog per-message,
-            // but always append (never replace) so history survives across batches
+            // Mutate the shared buffer directly (guarded by a lock, since multiple sync
+            // worker threads can call this concurrently) instead of forcing every call
+            // through a blocking UI-thread hop. Only marshal to the UI thread when a
+            // batch is actually ready to flush, which is the rare case, not the common one.
+            string? batch = null;
 
-            if (txtLog.InvokeRequired)
-            {
-                var delegateCall = new SetTextCallback(LogMesage);
-                Invoke(delegateCall, new object[] { message, flushLog });
-            }
-            else
+            lock (_LogLock)
             {
                 _MessageLog.AppendLine($"<{DateTime.Now.ToLongTimeString()}> {message}");
 
                 if (!_Timer.IsRunning || _Timer.ElapsedMilliseconds > 5000 || flushLog)
                 {
-                    txtLog.AppendText(_MessageLog.ToString());
-                    txtLog.SelectionStart = txtLog.TextLength;
-                    txtLog.ScrollToCaret();
-
-                    _Timer.Restart();
+                    batch = _MessageLog.ToString();
                     _MessageLog.Clear();
+                    _Timer.Restart();
                 }
             }
+
+            if (batch == null)
+                return;
+
+            if (txtLog.InvokeRequired)
+                Invoke(new Action<string>(FlushLogBatch), batch);
+            else
+                FlushLogBatch(batch);
+        }
+
+        protected void FlushLogBatch(string batch)
+        {
+            txtLog.AppendText(batch);
+            txtLog.SelectionStart = txtLog.TextLength;
+            txtLog.ScrollToCaret();
+        }
+
+        // For messages that must appear immediately (bypassing the normal batching) and
+        // stand out visually, e.g. a cancel notice. Flushes whatever's already pending first
+        // so ordering in the log stays correct, then appends this line in the given color.
+        protected void LogImportant(string message, Color color)
+        {
+            string coloredLine = $"<{DateTime.Now.ToLongTimeString()}> {message}" + Environment.NewLine;
+            string? pendingBatch;
+
+            lock (_LogLock)
+            {
+                pendingBatch = _MessageLog.Length > 0 ? _MessageLog.ToString() : null;
+                _MessageLog.Clear();
+                _Timer.Restart();
+            }
+
+            if (txtLog.InvokeRequired)
+                Invoke(new Action<string?, string, Color>(FlushImportant), pendingBatch, coloredLine, color);
+            else
+                FlushImportant(pendingBatch, coloredLine, color);
+        }
+
+        protected void FlushImportant(string? pendingBatch, string coloredLine, Color color)
+        {
+            if (!string.IsNullOrEmpty(pendingBatch))
+                txtLog.AppendText(pendingBatch);
+
+            int start = txtLog.TextLength;
+            txtLog.AppendText(coloredLine);
+            txtLog.Select(start, coloredLine.Length);
+            txtLog.SelectionColor = color;
+
+            txtLog.SelectionStart = txtLog.TextLength;
+            txtLog.SelectionLength = 0;
+            txtLog.SelectionColor = txtLog.ForeColor;
+
+            txtLog.ScrollToCaret();
         }
 
         protected void ClearLog()
         {
-            _MessageLog.Clear();
+            lock (_LogLock)
+            {
+                _MessageLog.Clear();
+            }
+
             txtLog.Clear();
         }
 
@@ -417,10 +611,13 @@ namespace DirectorySync
             _MainForm = this;
             _Timer = new Stopwatch();
             _SyncTimer = new Stopwatch();
+            _ProgressTimer = new Stopwatch();
             _MessageLog = new StringBuilder();
 
-            LogMesage("Jolly Roger's Directory Sync, Version " + Application.ProductVersion);
-            LogMesage("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.");
+            pbFiles.Maximum = PROGRESS_BAR_SCALE;
+
+            LogImportant("Jolly Roger's Directory Sync, Version " + Application.ProductVersion, Color.DarkGreen);
+            LogImportant("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.", Color.DarkGreen);
 
             SetTestMode();
         }
@@ -431,12 +628,10 @@ namespace DirectorySync
             ClearLog();
             ResetStatistics();
             _SyncTimer.Restart();
+            btnCancel.Enabled = true;
 
             try
             {
-                pbFiles.Maximum = CountFiles(txtSourceDir.Text);
-                pbFiles.Value = 0;
-
                 await Task.Run(async () =>
                 {
                     await SyncDirectory(txtSourceDir.Text, txtDestinationDir.Text);
@@ -444,13 +639,15 @@ namespace DirectorySync
             }
             catch (Exception ex)
             {
-                LogMesage("Error processing : " + ex.Message);
+                Interlocked.Increment(ref _Errors);
+                LogImportant("Error processing : " + ex.Message, Color.Red);
                 LogMesage("Halting synchronization.");
             }
             finally
             {
                 _SyncTimer.Stop();
                 UpdateStatistics();
+                btnCancel.Enabled = false;
             }
         }
 
@@ -460,6 +657,7 @@ namespace DirectorySync
             Interlocked.Exchange(ref _BytesCopied, 0);
             Interlocked.Exchange(ref _FilesRemoved, 0);
             Interlocked.Exchange(ref _FilesSkipped, 0);
+            Interlocked.Exchange(ref _Errors, 0);
             UpdateStatistics();
         }
 
@@ -480,6 +678,7 @@ namespace DirectorySync
             lblMegabytesPerSecondValue.Text = megabytesPerSecond.ToString("N2");
             lblFilesRemovedValue.Text = Interlocked.Read(ref _FilesRemoved).ToString("N0");
             lblFilesSkippedValue.Text = Interlocked.Read(ref _FilesSkipped).ToString("N0");
+            lblErrorsValue.Text = Interlocked.Read(ref _Errors).ToString("N0");
             lblTotalTimeValue.Text = _SyncTimer.Elapsed.ToString(@"hh\:mm\:ss");
         }
 
@@ -526,7 +725,8 @@ namespace DirectorySync
             if (!_HaltProcessing)
             {
                 _HaltProcessing = true;
-                LogMesage("Attempting to halt synchronization...");
+                btnCancel.Enabled = false;
+                LogImportant("Cancel requested... completing current operations and terminating.", Color.Red);
             }
         }
 
@@ -535,7 +735,6 @@ namespace DirectorySync
             bool readyToSync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
 
             this.btnSync.Enabled = readyToSync;
-            this.btnCancel.Enabled = readyToSync;
         }
 
         private void txtDestinationDir_TextChanged(object sender, EventArgs e)
@@ -543,7 +742,6 @@ namespace DirectorySync
             bool readyToSync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
 
             this.btnSync.Enabled = readyToSync;
-            this.btnCancel.Enabled = readyToSync;
         }
 
         private void chkTestMode_CheckedChanged(object sender, EventArgs e)

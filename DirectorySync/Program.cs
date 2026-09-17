@@ -16,6 +16,8 @@ FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TOR
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+using System.Diagnostics;
+
 namespace DirectorySync
 {
     internal static class Program
@@ -35,6 +37,12 @@ namespace DirectorySync
             Application.ThreadException += ApplicationThreadException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
 
+            // Defense-in-depth: prevents an exception from a forgotten/unawaited Task from
+            // ever reaching the process as a last-resort crash. The actual file-operation
+            // error handling lives in frmMain, right at each risky call — this is only a
+            // safety net for anything unexpected that slips past it.
+            TaskScheduler.UnobservedTaskException += TaskSchedulerOnUnobservedTaskException;
+
             ApplicationConfiguration.Initialize();
             Application.Run(new frmMain());
         }
@@ -48,7 +56,13 @@ namespace DirectorySync
         private static void ApplicationThreadException(object sender, ThreadExceptionEventArgs e)
         {
             var ex = (Exception)e.Exception;
-            MessageBox.Show($"Fatal error caught: {ex}", "Fatal THread Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Error caught: {ex}", "Application Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private static void TaskSchedulerOnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+        {
+            e.SetObserved();
+            Trace.WriteLine($"Unobserved task exception: {e.Exception}");
         }
     }
 }

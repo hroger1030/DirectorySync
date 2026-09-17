@@ -48,12 +48,15 @@
             lblMegabytesCopiedValue = new Label();
             lblMegabytesPerSecond = new Label();
             lblMegabytesPerSecondValue = new Label();
+            lblErrors = new Label();
+            lblErrorsValue = new Label();
             lblFilesRemoved = new Label();
             lblFilesRemovedValue = new Label();
             lblFilesSkipped = new Label();
             lblFilesSkippedValue = new Label();
             lblTotalTime = new Label();
             lblTotalTimeValue = new Label();
+            lblProgressPercent = new Label();
             grpStats = new GroupBox();
             SuspendLayout();
             // 
@@ -196,10 +199,20 @@
             pbFiles.Location = new Point(14, 287);
             pbFiles.Margin = new Padding(4);
             pbFiles.Name = "pbFiles";
-            pbFiles.Size = new Size(653, 32);
+            pbFiles.Size = new Size(593, 32);
             pbFiles.Step = 1;
             pbFiles.TabIndex = 14;
-            // 
+            //
+            // lblProgressPercent
+            //
+            lblProgressPercent.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            lblProgressPercent.Location = new Point(617, 295);
+            lblProgressPercent.Name = "lblProgressPercent";
+            lblProgressPercent.Size = new Size(50, 15);
+            lblProgressPercent.TabIndex = 23;
+            lblProgressPercent.Text = "0.0%";
+            lblProgressPercent.TextAlign = ContentAlignment.MiddleRight;
+            //
             // lblFilesCopied
             //
             lblFilesCopied.AutoSize = true;
@@ -253,6 +266,24 @@
             lblMegabytesPerSecondValue.Size = new Size(28, 15);
             lblMegabytesPerSecondValue.TabIndex = 5;
             lblMegabytesPerSecondValue.Text = "0.00";
+            //
+            // lblErrors
+            //
+            lblErrors.AutoSize = true;
+            lblErrors.Location = new Point(497, 22);
+            lblErrors.Name = "lblErrors";
+            lblErrors.Size = new Size(46, 15);
+            lblErrors.TabIndex = 14;
+            lblErrors.Text = "Errors:";
+            //
+            // lblErrorsValue
+            //
+            lblErrorsValue.AutoSize = true;
+            lblErrorsValue.Location = new Point(549, 22);
+            lblErrorsValue.Name = "lblErrorsValue";
+            lblErrorsValue.Size = new Size(13, 15);
+            lblErrorsValue.TabIndex = 15;
+            lblErrorsValue.Text = "0";
             //
             // lblFilesRemoved
             //
@@ -317,6 +348,8 @@
             grpStats.Controls.Add(lblMegabytesCopiedValue);
             grpStats.Controls.Add(lblMegabytesPerSecond);
             grpStats.Controls.Add(lblMegabytesPerSecondValue);
+            grpStats.Controls.Add(lblErrors);
+            grpStats.Controls.Add(lblErrorsValue);
             grpStats.Controls.Add(lblFilesRemoved);
             grpStats.Controls.Add(lblFilesRemovedValue);
             grpStats.Controls.Add(lblFilesSkipped);
@@ -336,6 +369,7 @@
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(681, 366);
             Controls.Add(grpStats);
+            Controls.Add(lblProgressPercent);
             Controls.Add(pbFiles);
             Controls.Add(btnCancel);
             Controls.Add(chkTestMode);
@@ -380,12 +414,15 @@
         private System.Windows.Forms.Label lblMegabytesCopiedValue;
         private System.Windows.Forms.Label lblMegabytesPerSecond;
         private System.Windows.Forms.Label lblMegabytesPerSecondValue;
+        private System.Windows.Forms.Label lblErrors;
+        private System.Windows.Forms.Label lblErrorsValue;
         private System.Windows.Forms.Label lblFilesRemoved;
         private System.Windows.Forms.Label lblFilesRemovedValue;
         private System.Windows.Forms.Label lblFilesSkipped;
         private System.Windows.Forms.Label lblFilesSkippedValue;
         private System.Windows.Forms.Label lblTotalTime;
         private System.Windows.Forms.Label lblTotalTimeValue;
+        private System.Windows.Forms.Label lblProgressPercent;
         private System.Windows.Forms.GroupBox grpStats;
     }
 }

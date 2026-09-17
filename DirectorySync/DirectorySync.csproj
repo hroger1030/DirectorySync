@@ -14,6 +14,7 @@
     <PackageTags>directory management;system tool;windows</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/hroger1030/FileRenamer</PackageProjectUrl>
+    <ApplicationIcon>JollyRoger.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
