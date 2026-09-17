@@ -184,7 +184,7 @@ namespace DirectorySync
             {
                 foreach (string file in Directory.GetFiles(destinationDirectory))
                 {
-                    string sourceFilename = sourceDirectory + "\\" + Path.GetFileName(file);
+                    string sourceFilename = Path.Combine(sourceDirectory, Path.GetFileName(file));
 
                     if (!File.Exists(sourceFilename))
                     {
@@ -210,7 +210,7 @@ namespace DirectorySync
             {
                 foreach (string item in Directory.GetFiles(sourceDirectory))
                 {
-                    string destinationFilename = destinationDirectory + "\\" + Path.GetFileName(item);
+                    string destinationFilename = Path.Combine(destinationDirectory, Path.GetFileName(item));
 
                     if (destinationFilename.Length > MAX_PATH)
                         LogMesage($"Path '{destinationFilename}' is {destinationFilename.Length} characters long. This exceeds the {MAX_PATH} character limit.");
