@@ -1,17 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
+﻿/*
+The MIT License (MIT)
+
+Copyright (c) 2017 Roger Hill
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
 using System.Diagnostics;
-using System.IO;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace DirectorySync
 {
     public partial class frmMain : Form
     {
-        protected delegate void SetTextCallback(string text, bool flush_log);
+        protected delegate void SetTextCallback(string text, bool flushLog);
         protected delegate void UpdateProgressBar(int amount);
 
         private static readonly int MAX_PATH = 260;
@@ -35,13 +47,28 @@ namespace DirectorySync
                 return false;
             }
 
-            if (txtSourceDir.Text == txtDestinationDir.Text)
+            string sourceFull = Path.GetFullPath(txtSourceDir.Text).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string destinationFull = Path.GetFullPath(txtDestinationDir.Text).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            if (string.Equals(sourceFull, destinationFull, StringComparison.OrdinalIgnoreCase))
             {
                 LogMesage("Error: Source directory and destination directory must be different.");
                 return false;
             }
 
+            if (IsSubdirectoryOf(destinationFull, sourceFull) || IsSubdirectoryOf(sourceFull, destinationFull))
+            {
+                LogMesage("Error: Source directory and destination directory cannot be nested inside one another.");
+                return false;
+            }
+
             return true;
+        }
+
+        private static bool IsSubdirectoryOf(string candidateChild, string parent)
+        {
+            string parentWithSeparator = parent + Path.DirectorySeparatorChar;
+            return candidateChild.StartsWith(parentWithSeparator, StringComparison.OrdinalIgnoreCase);
         }
 
         protected void RemoveFileAttributes(string directory, bool recursive)
@@ -74,26 +101,26 @@ namespace DirectorySync
                 throw new ArgumentException($"Directory {startingDirectory} does not exist");
 
             int count = 0;
-            var work_queue = new Queue<string>();
+            var workQueue = new Queue<string>();
 
-            work_queue.Enqueue(startingDirectory);
+            workQueue.Enqueue(startingDirectory);
 
-            while (work_queue.Count > 0)
+            while (workQueue.Count > 0)
             {
-                string current_firetory = work_queue.Dequeue();
+                string currentFiretory = workQueue.Dequeue();
 
-                var buffer = Directory.GetDirectories(current_firetory);
+                var buffer = Directory.GetDirectories(currentFiretory);
 
                 foreach (var subdirectory in buffer)
-                    work_queue.Enqueue(subdirectory);
+                    workQueue.Enqueue(subdirectory);
 
-                count += Directory.GetFiles(current_firetory).Length;
+                count += Directory.GetFiles(currentFiretory).Length;
             }
 
             return count;
         }
 
-        protected async void SyncDirectory(string sourceDirectory, string destinationDirectory)
+        protected async Task SyncDirectory(string sourceDirectory, string destinationDirectory)
         {
             if (ValidatePaths())
             {
@@ -101,15 +128,15 @@ namespace DirectorySync
 
                 LogMesage("Calculating avaialble space...", true);
 
-                var drive_root = Path.GetPathRoot(destinationDirectory);
+                var driveRoot = Path.GetPathRoot(destinationDirectory);
 
-                long source_size = GetTotalDirectorySize(sourceDirectory);
-                long destination_size = GetTotalDirectorySize(destinationDirectory);
-                long free_space = GetTotalFreeSpace(drive_root!);
+                long sourceSize = GetTotalDirectorySize(sourceDirectory);
+                long destinationSize = GetTotalDirectorySize(destinationDirectory);
+                long freeSpace = GetTotalFreeSpace(driveRoot!);
 
-                if (source_size > (destination_size + free_space))
+                if (sourceSize > (destinationSize + freeSpace))
                 {
-                    LogMesage($"Cannot copy files, not enought space avaialble on '{drive_root}'", true);
+                    LogMesage($"Cannot copy files, not enought space avaialble on '{driveRoot}'", true);
                     return;
                 }
 
@@ -134,7 +161,7 @@ namespace DirectorySync
             if (_HaltProcessing == true)
                 return;
 
-            int file_count = 0;
+            int fileCount = 0;
 
             LogMesage($"Starting sync of directory {sourceDirectory}.");
 
@@ -152,15 +179,15 @@ namespace DirectorySync
             {
                 foreach (string file in Directory.GetFiles(destinationDirectory))
                 {
-                    string source_filename = sourceDirectory + "\\" + Path.GetFileName(file);
+                    string sourceFilename = sourceDirectory + "\\" + Path.GetFileName(file);
 
-                    if (!File.Exists(source_filename))
+                    if (!File.Exists(sourceFilename))
                     {
                         if (!_TestMode)
                         {
-                            var file_attributes = File.GetAttributes(file);
+                            var fileAttributes = File.GetAttributes(file);
 
-                            if (file_attributes != FileAttributes.Normal)
+                            if (fileAttributes != FileAttributes.Normal)
                                 File.SetAttributes(file, FileAttributes.Normal);
 
                             File.Delete(file);
@@ -177,39 +204,39 @@ namespace DirectorySync
             {
                 foreach (string item in Directory.GetFiles(sourceDirectory))
                 {
-                    string destination_filename = destinationDirectory + "\\" + Path.GetFileName(item);
+                    string destinationFilename = destinationDirectory + "\\" + Path.GetFileName(item);
 
-                    if (File.Exists(destination_filename))
+                    if (destinationFilename.Length > MAX_PATH)
+                        LogMesage($"Path '{destinationFilename}' is {destinationFilename.Length} characters long. This exceeds the {MAX_PATH} character limit.");
+
+                    if (File.Exists(destinationFilename))
                     {
-                        if (File.GetLastWriteTime(item) != File.GetLastWriteTime(destination_filename))
+                        if (File.GetLastWriteTime(item) != File.GetLastWriteTime(destinationFilename))
                         {
-                            if (destination_filename.Length > 260)
-                                LogMesage($"Path {destination_filename}' is {destination_filename.Length} characters long. This exceeds the {MAX_PATH} character limit.");
-
                             if (!_TestMode)
                             {
                                 // Make sure we are clear for move.
 
-                                var file_attributes = File.GetAttributes(destination_filename);
+                                var fileAttributes = File.GetAttributes(destinationFilename);
 
-                                if (file_attributes != FileAttributes.Normal)
-                                    File.SetAttributes(destination_filename, FileAttributes.Normal);
+                                if (fileAttributes != FileAttributes.Normal)
+                                    File.SetAttributes(destinationFilename, FileAttributes.Normal);
 
-                                File.Copy(item, destination_filename, true);
+                                File.Copy(item, destinationFilename, true);
                             }
 
-                            LogMesage("Updating out of date file " + destination_filename);
+                            LogMesage("Updating out of date file " + destinationFilename);
                         }
                     }
                     else
                     {
                         if (!_TestMode)
-                            File.Copy(item, destination_filename);
+                            File.Copy(item, destinationFilename);
 
-                        LogMesage("Copying " + destination_filename);
+                        LogMesage("Copying " + destinationFilename);
                     }
 
-                    file_count++;
+                    fileCount++;
                 }
             }
 
@@ -219,7 +246,7 @@ namespace DirectorySync
             {
                 foreach (string directory in Directory.GetDirectories(destinationDirectory))
                 {
-                    string source = directory.Replace(destinationRoot, sourceRoot);
+                    string source = Path.Combine(sourceRoot, Path.GetRelativePath(destinationRoot, directory));
 
                     if (!Directory.Exists(source))
                     {
@@ -235,39 +262,39 @@ namespace DirectorySync
                 }
             }
 
-            string[] directory_list = Directory.GetDirectories(sourceDirectory);
+            string[] directoryList = Directory.GetDirectories(sourceDirectory);
 
             //// call function recursively on subdirectories
-            //foreach (var item in directory_list)    
+            //foreach (var item in directoryList)
             //{
-            //    string destination = destination_root + item.Replace(source_root, string.Empty);
-            //    SyncDirectory(source_root, destination_root ,item, destination);
+            //    string destination = destinationRoot + item.Replace(sourceRoot, string.Empty);
+            //    SyncDirectory(sourceRoot, destinationRoot ,item, destination);
             //}
 
-            Parallel.ForEach(directory_list, new ParallelOptions { MaxDegreeOfParallelism = 4 }, current_directory =>
+            Parallel.ForEach(directoryList, new ParallelOptions { MaxDegreeOfParallelism = 4 }, currentDirectory =>
             {
-                string destination = destinationRoot + current_directory.Replace(sourceRoot, string.Empty);
-                SyncDirectory(sourceRoot, destinationRoot, current_directory, destination);
+                string destination = Path.Combine(destinationRoot, Path.GetRelativePath(sourceRoot, currentDirectory));
+                SyncDirectory(sourceRoot, destinationRoot, currentDirectory, destination);
             });
 
             LogMesage($"Sync of directory {sourceDirectory} complete.", true);
-            UpdateProgress(file_count);
+            UpdateProgress(fileCount);
         }
 
-        protected static long GetTotalFreeSpace(string driveName)
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto, SetLastError = true)]
+        private static extern bool GetDiskFreeSpaceEx(string lpDirectoryName, out ulong lpFreeBytesAvailable, out ulong lpTotalNumberOfBytes, out ulong lpTotalNumberOfFreeBytes);
+
+        protected static long GetTotalFreeSpace(string path)
         {
-            if (string.IsNullOrWhiteSpace(driveName))
-                throw new ArgumentNullException(nameof(driveName));
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentNullException(nameof(path));
 
-            foreach (DriveInfo drive in DriveInfo.GetDrives())
-            {
-                if (drive.IsReady && drive.Name == driveName)
-                {
-                    return drive.AvailableFreeSpace;
-                }
-            }
+            // Use GetDiskFreeSpaceEx (rather than DriveInfo) so this works for both local
+            // drive letters and UNC network share paths.
+            if (!GetDiskFreeSpaceEx(path, out ulong freeBytesAvailable, out _, out _))
+                throw new IOException($"Unable to determine free space for '{path}'. Win32 error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}.");
 
-            throw new Exception($"Found no drives named '{driveName}'");
+            return (long)freeBytesAvailable;
         }
 
         protected long GetTotalDirectorySize(string directoryPath)
@@ -287,23 +314,23 @@ namespace DirectorySync
             if (directoryInfo == null)
                 throw new ArgumentNullException(nameof(directoryInfo));
 
-            long total_size = 0;
+            long totalSize = 0;
 
             foreach (var fileInfo in directoryInfo.GetFiles())
-                Interlocked.Add(ref total_size, fileInfo.Length);
+                Interlocked.Add(ref totalSize, fileInfo.Length);
 
             if (recursive)
-                Parallel.ForEach(directoryInfo.GetDirectories(), (subDirectory) => Interlocked.Add(ref total_size, GetDirectorySize(subDirectory, recursive)));
+                Parallel.ForEach(directoryInfo.GetDirectories(), (subDirectory) => Interlocked.Add(ref totalSize, GetDirectorySize(subDirectory, recursive)));
 
-            return total_size;
+            return totalSize;
         }
 
         protected void UpdateProgress(int amount)
         {
             if (pbFiles.InvokeRequired)
             {
-                var delegate_call = new UpdateProgressBar(UpdateProgress);
-                Invoke(delegate_call, new object[] { amount });
+                var delegateCall = new UpdateProgressBar(UpdateProgress);
+                Invoke(delegateCall, new object[] { amount });
             }
             else
             {
@@ -325,8 +352,8 @@ namespace DirectorySync
 
             if (txtLog.InvokeRequired)
             {
-                var delegate_call = new SetTextCallback(LogMesage);
-                Invoke(delegate_call, new object[] { message, flushLog });
+                var delegateCall = new SetTextCallback(LogMesage);
+                Invoke(delegateCall, new object[] { message, flushLog });
             }
             else
             {
@@ -385,9 +412,9 @@ namespace DirectorySync
                 pbFiles.Maximum = CountFiles(txtSourceDir.Text);
                 pbFiles.Value = 0;
 
-                await Task.Run(() =>
+                await Task.Run(async () =>
                 {
-                    SyncDirectory(txtSourceDir.Text, txtDestinationDir.Text);
+                    await SyncDirectory(txtSourceDir.Text, txtDestinationDir.Text);
                 });
             }
             catch (Exception ex)
@@ -416,16 +443,16 @@ namespace DirectorySync
 
         private void btnDestination_Click(object sender, EventArgs e)
         {
-            var folder_picker = new FolderBrowserDialog
+            var folderPicker = new FolderBrowserDialog
             {
                 RootFolder = Environment.SpecialFolder.MyComputer,
                 Description = "Please select the destination folder."
             };
 
-            DialogResult result = folder_picker.ShowDialog();
+            DialogResult result = folderPicker.ShowDialog();
 
             if (result == DialogResult.OK)
-                this.txtDestinationDir.Text = folder_picker.SelectedPath;
+                this.txtDestinationDir.Text = folderPicker.SelectedPath;
         }
 
         private void btnClearLog_Click(object sender, EventArgs e)
@@ -446,18 +473,18 @@ namespace DirectorySync
 
         private void txtSourceDir_TextChanged(object sender, EventArgs e)
         {
-            bool ready_to_sync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
+            bool readyToSync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
 
-            this.btnSync.Enabled = ready_to_sync;
-            this.btnCancel.Enabled = ready_to_sync;
+            this.btnSync.Enabled = readyToSync;
+            this.btnCancel.Enabled = readyToSync;
         }
 
         private void txtDestinationDir_TextChanged(object sender, EventArgs e)
         {
-            bool ready_to_sync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
+            bool readyToSync = (txtDestinationDir.Text.Length > 0) && (txtSourceDir.Text.Length > 0);
 
-            this.btnSync.Enabled = ready_to_sync;
-            this.btnCancel.Enabled = ready_to_sync;
+            this.btnSync.Enabled = readyToSync;
+            this.btnCancel.Enabled = readyToSync;
         }
 
         private void chkTestMode_CheckedChanged(object sender, EventArgs e)
