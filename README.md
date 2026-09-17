@@ -1,4 +1,4 @@
-# Jolly Roger's Directory Sync
+# Directory Sync
 
 A small Windows desktop utility for one-way, mirror-style synchronization of a source
 directory to a destination directory.
@@ -37,7 +37,7 @@ Or open `DirectorySync.sln` in Visual Studio and press F5.
 
 1. **Select Source** / **Select Destination** — pick the two folders, or type/paste the
    paths directly into the text boxes.
-2. **Test Mode** — when checked, the app logs everything it *would* do without copying,
+2. **Test Mode** — when checked, the app logs everything it _would_ do without copying,
    deleting, or creating anything. Useful for a dry run before trusting it with real data.
 3. **Syncronize Directories** — starts the sync. A progress bar tracks file count, and the
    log pane reports each copy/delete/skip as it happens.

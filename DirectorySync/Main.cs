@@ -32,6 +32,11 @@ namespace DirectorySync
         protected volatile bool _HaltProcessing;
         protected Form _MainForm;
         protected Stopwatch _Timer;
+        protected Stopwatch _SyncTimer;
+        private long _FilesCopied;
+        private long _BytesCopied;
+        private long _FilesRemoved;
+        private long _FilesSkipped;
 
         protected bool ValidatePaths()
         {
@@ -191,6 +196,7 @@ namespace DirectorySync
                                 File.SetAttributes(file, FileAttributes.Normal);
 
                             File.Delete(file);
+                            Interlocked.Increment(ref _FilesRemoved);
                         }
 
                         LogMesage("Deleting " + file);
@@ -225,7 +231,13 @@ namespace DirectorySync
                                 File.Copy(item, destinationFilename, true);
                             }
 
+                            Interlocked.Increment(ref _FilesCopied);
+                            Interlocked.Add(ref _BytesCopied, new FileInfo(item).Length);
                             LogMesage("Updating out of date file " + destinationFilename);
+                        }
+                        else
+                        {
+                            Interlocked.Increment(ref _FilesSkipped);
                         }
                     }
                     else
@@ -233,6 +245,8 @@ namespace DirectorySync
                         if (!_TestMode)
                             File.Copy(item, destinationFilename);
 
+                        Interlocked.Increment(ref _FilesCopied);
+                        Interlocked.Add(ref _BytesCopied, new FileInfo(item).Length);
                         LogMesage("Copying " + destinationFilename);
                     }
 
@@ -337,6 +351,8 @@ namespace DirectorySync
                 pbFiles.Step = amount;
                 pbFiles.PerformStep();
 
+                UpdateStatistics();
+
                 Console.WriteLine("Amount: " + amount.ToString());
             }
         }
@@ -395,6 +411,7 @@ namespace DirectorySync
 
             _MainForm = this;
             _Timer = new Stopwatch();
+            _SyncTimer = new Stopwatch();
             _MessageLog = new StringBuilder();
 
             LogMesage("Jolly Roger's Directory Sync, Version " + Application.ProductVersion);
@@ -406,6 +423,8 @@ namespace DirectorySync
         private async void btnSync_Click(object sender, EventArgs e)
         {
             _HaltProcessing = false;
+            ResetStatistics();
+            _SyncTimer.Restart();
 
             try
             {
@@ -422,6 +441,40 @@ namespace DirectorySync
                 LogMesage("Error processing : " + ex.Message);
                 LogMesage("Halting synchronization.");
             }
+            finally
+            {
+                _SyncTimer.Stop();
+                UpdateStatistics();
+            }
+        }
+
+        protected void ResetStatistics()
+        {
+            Interlocked.Exchange(ref _FilesCopied, 0);
+            Interlocked.Exchange(ref _BytesCopied, 0);
+            Interlocked.Exchange(ref _FilesRemoved, 0);
+            Interlocked.Exchange(ref _FilesSkipped, 0);
+            UpdateStatistics();
+        }
+
+        protected void UpdateStatistics()
+        {
+            if (lblFilesCopiedValue.InvokeRequired)
+            {
+                Invoke(new Action(UpdateStatistics));
+                return;
+            }
+
+            double megabytesCopied = Interlocked.Read(ref _BytesCopied) / (1024d * 1024d);
+            double elapsedSeconds = Math.Max(_SyncTimer.Elapsed.TotalSeconds, 0.001d);
+            double megabytesPerSecond = megabytesCopied / elapsedSeconds;
+
+            lblFilesCopiedValue.Text = Interlocked.Read(ref _FilesCopied).ToString("N0");
+            lblMegabytesCopiedValue.Text = megabytesCopied.ToString("N2");
+            lblMegabytesPerSecondValue.Text = megabytesPerSecond.ToString("N2");
+            lblFilesRemovedValue.Text = Interlocked.Read(ref _FilesRemoved).ToString("N0");
+            lblFilesSkippedValue.Text = Interlocked.Read(ref _FilesSkipped).ToString("N0");
+            lblTotalTimeValue.Text = _SyncTimer.Elapsed.ToString(@"hh\:mm\:ss");
         }
 
         private void btnSelectSource_Click(object sender, EventArgs e)
