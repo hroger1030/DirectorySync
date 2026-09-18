@@ -599,7 +599,7 @@ namespace DirectorySync
         }
 
 
-        public frmMain()
+        public frmMain(string? initialSourceDir = null)
         {
             InitializeComponent();
 
@@ -622,6 +622,9 @@ namespace DirectorySync
             LogImportant("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.", ThemeManager.SuccessColor);
 
             SetTestMode();
+
+            if (!string.IsNullOrEmpty(initialSourceDir) && Directory.Exists(initialSourceDir))
+                txtSourceDir.Text = initialSourceDir;
         }
 
         private void ApplyTheme(AppTheme theme)

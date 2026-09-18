@@ -26,7 +26,7 @@ namespace DirectorySync
         ///  The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
@@ -44,7 +44,7 @@ namespace DirectorySync
             TaskScheduler.UnobservedTaskException += TaskSchedulerOnUnobservedTaskException;
 
             ApplicationConfiguration.Initialize();
-            Application.Run(new frmMain());
+            Application.Run(new frmMain(args.Length > 0 ? args[0] : null));
         }
 
         private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
