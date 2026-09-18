@@ -47,7 +47,7 @@ namespace DirectorySync
         {
             if (!Directory.Exists(txtSourceDir.Text))
             {
-                LogImportant("Error: Source directory does not exist.", Color.Red);
+                LogImportant("Error: Source directory does not exist.", ThemeManager.ErrorColor);
                 return false;
             }
 
@@ -61,7 +61,7 @@ namespace DirectorySync
             }
             catch (DirectoryNotFoundException)
             {
-                LogImportant("Error: Destination path is not reachable (no existing parent directory found).", Color.Red);
+                LogImportant("Error: Destination path is not reachable (no existing parent directory found).", ThemeManager.ErrorColor);
                 return false;
             }
 
@@ -70,13 +70,13 @@ namespace DirectorySync
 
             if (string.Equals(sourceFull, destinationFull, StringComparison.OrdinalIgnoreCase))
             {
-                LogImportant("Error: Source directory and destination directory must be different.", Color.Red);
+                LogImportant("Error: Source directory and destination directory must be different.", ThemeManager.ErrorColor);
                 return false;
             }
 
             if (IsSubdirectoryOf(destinationFull, sourceFull) || IsSubdirectoryOf(sourceFull, destinationFull))
             {
-                LogImportant("Error: Source directory and destination directory cannot be nested inside one another.", Color.Red);
+                LogImportant("Error: Source directory and destination directory cannot be nested inside one another.", ThemeManager.ErrorColor);
                 return false;
             }
 
@@ -181,7 +181,7 @@ namespace DirectorySync
             catch (Exception ex)
             {
                 Interlocked.Increment(ref _Errors);
-                LogImportant($"Error listing files in '{directory}': {ex.Message}", Color.Red);
+                LogImportant($"Error listing files in '{directory}': {ex.Message}", ThemeManager.ErrorColor);
                 return Array.Empty<string>();
             }
         }
@@ -195,7 +195,7 @@ namespace DirectorySync
             catch (Exception ex)
             {
                 Interlocked.Increment(ref _Errors);
-                LogImportant($"Error listing subdirectories in '{directory}': {ex.Message}", Color.Red);
+                LogImportant($"Error listing subdirectories in '{directory}': {ex.Message}", ThemeManager.ErrorColor);
                 return Array.Empty<string>();
             }
         }
@@ -222,7 +222,7 @@ namespace DirectorySync
 
                 if (sourceStats.TotalBytes > (destinationStats.TotalBytes + freeSpace))
                 {
-                    LogImportant($"Cannot copy files, not enought space avaialble on '{driveRoot}'", Color.Red);
+                    LogImportant($"Cannot copy files, not enought space avaialble on '{driveRoot}'", ThemeManager.ErrorColor);
                     return;
                 }
 
@@ -241,7 +241,7 @@ namespace DirectorySync
                 }
                 else
                 {
-                    LogImportant("Synchronization complete.", Color.DarkGreen);
+                    LogImportant("Synchronization complete.", ThemeManager.SuccessColor);
                     SetProgressValue(PROGRESS_BAR_SCALE);
                 }
 
@@ -269,7 +269,7 @@ namespace DirectorySync
                     catch (Exception ex)
                     {
                         Interlocked.Increment(ref _Errors);
-                        LogImportant($"Error creating directory '{destinationDirectory}': {ex.Message}", Color.Red);
+                        LogImportant($"Error creating directory '{destinationDirectory}': {ex.Message}", ThemeManager.ErrorColor);
                         return;
                     }
                 }
@@ -310,7 +310,7 @@ namespace DirectorySync
                     catch (Exception ex)
                     {
                         Interlocked.Increment(ref _Errors);
-                        LogImportant($"Error deleting '{file}': {ex.Message}", Color.Red);
+                        LogImportant($"Error deleting '{file}': {ex.Message}", ThemeManager.ErrorColor);
                     }
                 });
             }
@@ -375,7 +375,7 @@ namespace DirectorySync
                     catch (Exception ex)
                     {
                         Interlocked.Increment(ref _Errors);
-                        LogImportant($"Error copying '{item}' to '{destinationFilename}': {ex.Message}", Color.Red);
+                        LogImportant($"Error copying '{item}' to '{destinationFilename}': {ex.Message}", ThemeManager.ErrorColor);
                     }
 
                     // Track progress by bytes of source examined (copied, skipped, or failed), not
@@ -412,7 +412,7 @@ namespace DirectorySync
                             catch (Exception ex)
                             {
                                 Interlocked.Increment(ref _Errors);
-                                LogImportant($"Error deleting directory '{directory}': {ex.Message}", Color.Red);
+                                LogImportant($"Error deleting directory '{directory}': {ex.Message}", ThemeManager.ErrorColor);
                             }
                         }
                     }
@@ -606,7 +606,6 @@ namespace DirectorySync
             Text = "Jolly Roger's Directory Sync";
             btnSync.Enabled = false;
             btnCancel.Enabled = false;
-            lblAbout.Text = "Written by Roger Hill, 2011";
 
             _MainForm = this;
             _Timer = new Stopwatch();
@@ -616,10 +615,60 @@ namespace DirectorySync
 
             pbFiles.Maximum = PROGRESS_BAR_SCALE;
 
-            LogImportant("Jolly Roger's Directory Sync, Version " + Application.ProductVersion, Color.DarkGreen);
-            LogImportant("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.", Color.DarkGreen);
+            ThemeManager.Apply(ThemeManager.LoadSaved());
+            UpdateThemeMenuChecks();
+
+            LogImportant("Jolly Roger's Directory Sync, Version " + Application.ProductVersion, ThemeManager.SuccessColor);
+            LogImportant("Please select a source and destination directory. Any content in the destination directory will be updated to match that of the source directory.", ThemeManager.SuccessColor);
 
             SetTestMode();
+        }
+
+        private void ApplyTheme(AppTheme theme)
+        {
+            ThemeManager.Apply(theme);
+
+            // Native dark-mode theming (titlebar, control chrome) is applied on handle creation,
+            // so an already-open form needs its handle recreated to pick up a change made at runtime.
+            RecreateHandle();
+
+            UpdateThemeMenuChecks();
+        }
+
+        private void UpdateThemeMenuChecks()
+        {
+            mnuThemeLight.Checked = ThemeManager.Current == AppTheme.Light;
+            mnuThemeDark.Checked = ThemeManager.Current == AppTheme.Dark;
+            mnuThemeSystem.Checked = ThemeManager.Current == AppTheme.System;
+        }
+
+        private void mnuExit_Click(object sender, EventArgs e)
+        {
+            Close();
+        }
+
+        private void mnuAbout_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show(
+                "Jolly Roger's Directory Sync, Version " + Application.ProductVersion + Environment.NewLine + "Written by Roger Hill, 2011",
+                "About",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void mnuThemeLight_Click(object sender, EventArgs e)
+        {
+            ApplyTheme(AppTheme.Light);
+        }
+
+        private void mnuThemeDark_Click(object sender, EventArgs e)
+        {
+            ApplyTheme(AppTheme.Dark);
+        }
+
+        private void mnuThemeSystem_Click(object sender, EventArgs e)
+        {
+            ApplyTheme(AppTheme.System);
         }
 
         private async void btnSync_Click(object sender, EventArgs e)
@@ -640,7 +689,7 @@ namespace DirectorySync
             catch (Exception ex)
             {
                 Interlocked.Increment(ref _Errors);
-                LogImportant("Error processing : " + ex.Message, Color.Red);
+                LogImportant("Error processing : " + ex.Message, ThemeManager.ErrorColor);
                 LogMesage("Halting synchronization.");
             }
             finally
@@ -726,7 +775,7 @@ namespace DirectorySync
             {
                 _HaltProcessing = true;
                 btnCancel.Enabled = false;
-                LogImportant("Cancel requested... completing current operations and terminating.", Color.Red);
+                LogImportant("Cancel requested... completing current operations and terminating.", ThemeManager.ErrorColor);
             }
         }
 

@@ -38,7 +38,6 @@
             btnDestination = new Button();
             btnClearLog = new Button();
             txtLog = new RichTextBox();
-            lblAbout = new Label();
             chkTestMode = new CheckBox();
             btnCancel = new Button();
             pbFiles = new ProgressBar();
@@ -58,12 +57,87 @@
             lblTotalTimeValue = new Label();
             lblProgressPercent = new Label();
             grpStats = new GroupBox();
+            menuStrip1 = new MenuStrip();
+            fileToolStripMenuItem = new ToolStripMenuItem();
+            mnuExit = new ToolStripMenuItem();
+            themeToolStripMenuItem = new ToolStripMenuItem();
+            mnuThemeLight = new ToolStripMenuItem();
+            mnuThemeDark = new ToolStripMenuItem();
+            mnuThemeSystem = new ToolStripMenuItem();
+            helpToolStripMenuItem = new ToolStripMenuItem();
+            mnuAbout = new ToolStripMenuItem();
+            menuStrip1.SuspendLayout();
             SuspendLayout();
-            // 
+            //
+            // menuStrip1
+            //
+            menuStrip1.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, themeToolStripMenuItem, helpToolStripMenuItem });
+            menuStrip1.Location = new Point(0, 0);
+            menuStrip1.Name = "menuStrip1";
+            menuStrip1.Size = new Size(681, 24);
+            menuStrip1.TabIndex = 24;
+            menuStrip1.Text = "menuStrip1";
+            //
+            // fileToolStripMenuItem
+            //
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { mnuExit });
+            fileToolStripMenuItem.Name = "fileToolStripMenuItem";
+            fileToolStripMenuItem.Size = new Size(37, 20);
+            fileToolStripMenuItem.Text = "&File";
+            //
+            // mnuExit
+            //
+            mnuExit.Name = "mnuExit";
+            mnuExit.Size = new Size(93, 22);
+            mnuExit.Text = "E&xit";
+            mnuExit.Click += mnuExit_Click;
+            //
+            // themeToolStripMenuItem
+            //
+            themeToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { mnuThemeLight, mnuThemeDark, mnuThemeSystem });
+            themeToolStripMenuItem.Name = "themeToolStripMenuItem";
+            themeToolStripMenuItem.Size = new Size(54, 20);
+            themeToolStripMenuItem.Text = "&Theme";
+            //
+            // mnuThemeLight
+            //
+            mnuThemeLight.Name = "mnuThemeLight";
+            mnuThemeLight.Size = new Size(115, 22);
+            mnuThemeLight.Text = "&Light";
+            mnuThemeLight.Click += mnuThemeLight_Click;
+            //
+            // mnuThemeDark
+            //
+            mnuThemeDark.Name = "mnuThemeDark";
+            mnuThemeDark.Size = new Size(115, 22);
+            mnuThemeDark.Text = "&Dark";
+            mnuThemeDark.Click += mnuThemeDark_Click;
+            //
+            // mnuThemeSystem
+            //
+            mnuThemeSystem.Name = "mnuThemeSystem";
+            mnuThemeSystem.Size = new Size(115, 22);
+            mnuThemeSystem.Text = "&System";
+            mnuThemeSystem.Click += mnuThemeSystem_Click;
+            //
+            // helpToolStripMenuItem
+            //
+            helpToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { mnuAbout });
+            helpToolStripMenuItem.Name = "helpToolStripMenuItem";
+            helpToolStripMenuItem.Size = new Size(44, 20);
+            helpToolStripMenuItem.Text = "&Help";
+            //
+            // mnuAbout
+            //
+            mnuAbout.Name = "mnuAbout";
+            mnuAbout.Size = new Size(107, 22);
+            mnuAbout.Text = "&About";
+            mnuAbout.Click += mnuAbout_Click;
+            //
             // btnSync
-            // 
+            //
             btnSync.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnSync.Location = new Point(326, 325);
+            btnSync.Location = new Point(326, 349);
             btnSync.Margin = new Padding(4);
             btnSync.Name = "btnSync";
             btnSync.Size = new Size(153, 26);
@@ -75,7 +149,7 @@
             // txtSourceDir
             // 
             txtSourceDir.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtSourceDir.Location = new Point(150, 14);
+            txtSourceDir.Location = new Point(150, 38);
             txtSourceDir.Margin = new Padding(4);
             txtSourceDir.Name = "txtSourceDir";
             txtSourceDir.Size = new Size(381, 23);
@@ -85,7 +159,7 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(36, 17);
+            label1.Location = new Point(36, 41);
             label1.Margin = new Padding(4, 0, 4, 0);
             label1.Name = "label1";
             label1.Size = new Size(97, 15);
@@ -95,7 +169,7 @@
             // label2
             // 
             label2.AutoSize = true;
-            label2.Location = new Point(14, 56);
+            label2.Location = new Point(14, 80);
             label2.Margin = new Padding(4, 0, 4, 0);
             label2.Name = "label2";
             label2.Size = new Size(121, 15);
@@ -105,7 +179,7 @@
             // txtDestinationDir
             // 
             txtDestinationDir.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtDestinationDir.Location = new Point(147, 53);
+            txtDestinationDir.Location = new Point(147, 77);
             txtDestinationDir.Margin = new Padding(4);
             txtDestinationDir.Name = "txtDestinationDir";
             txtDestinationDir.Size = new Size(384, 23);
@@ -115,7 +189,7 @@
             // btnSelectSource
             // 
             btnSelectSource.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnSelectSource.Location = new Point(538, 11);
+            btnSelectSource.Location = new Point(538, 35);
             btnSelectSource.Margin = new Padding(4);
             btnSelectSource.Name = "btnSelectSource";
             btnSelectSource.Size = new Size(130, 26);
@@ -127,7 +201,7 @@
             // btnDestination
             // 
             btnDestination.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnDestination.Location = new Point(538, 51);
+            btnDestination.Location = new Point(538, 75);
             btnDestination.Margin = new Padding(4);
             btnDestination.Name = "btnDestination";
             btnDestination.Size = new Size(130, 26);
@@ -139,7 +213,7 @@
             // btnClearLog
             // 
             btnClearLog.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnClearLog.Location = new Point(580, 325);
+            btnClearLog.Location = new Point(580, 349);
             btnClearLog.Margin = new Padding(4);
             btnClearLog.Name = "btnClearLog";
             btnClearLog.Size = new Size(88, 26);
@@ -151,28 +225,18 @@
             // txtLog
             // 
             txtLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtLog.Location = new Point(14, 160);
+            txtLog.Location = new Point(14, 184);
             txtLog.Margin = new Padding(4);
             txtLog.Name = "txtLog";
             txtLog.Size = new Size(653, 118);
             txtLog.TabIndex = 10;
             txtLog.Text = "";
-            // 
-            // lblAbout
-            // 
-            lblAbout.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            lblAbout.Location = new Point(14, 331);
-            lblAbout.Margin = new Padding(4, 0, 4, 0);
-            lblAbout.Name = "lblAbout";
-            lblAbout.Size = new Size(217, 26);
-            lblAbout.TabIndex = 11;
-            lblAbout.Text = "Author Notice";
-            // 
+            //
             // chkTestMode
             // 
             chkTestMode.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             chkTestMode.AutoSize = true;
-            chkTestMode.Location = new Point(239, 330);
+            chkTestMode.Location = new Point(239, 354);
             chkTestMode.Margin = new Padding(4);
             chkTestMode.Name = "chkTestMode";
             chkTestMode.Size = new Size(80, 19);
@@ -184,7 +248,7 @@
             // btnCancel
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnCancel.Location = new Point(486, 325);
+            btnCancel.Location = new Point(486, 349);
             btnCancel.Margin = new Padding(4);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(88, 26);
@@ -196,7 +260,7 @@
             // pbFiles
             // 
             pbFiles.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            pbFiles.Location = new Point(14, 287);
+            pbFiles.Location = new Point(14, 311);
             pbFiles.Margin = new Padding(4);
             pbFiles.Name = "pbFiles";
             pbFiles.Size = new Size(593, 32);
@@ -206,7 +270,7 @@
             // lblProgressPercent
             //
             lblProgressPercent.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            lblProgressPercent.Location = new Point(617, 295);
+            lblProgressPercent.Location = new Point(617, 319);
             lblProgressPercent.Name = "lblProgressPercent";
             lblProgressPercent.Size = new Size(50, 15);
             lblProgressPercent.TabIndex = 23;
@@ -356,7 +420,7 @@
             grpStats.Controls.Add(lblFilesSkippedValue);
             grpStats.Controls.Add(lblTotalTime);
             grpStats.Controls.Add(lblTotalTimeValue);
-            grpStats.Location = new Point(14, 80);
+            grpStats.Location = new Point(14, 104);
             grpStats.Name = "grpStats";
             grpStats.Size = new Size(653, 72);
             grpStats.TabIndex = 15;
@@ -367,13 +431,12 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(681, 366);
+            ClientSize = new Size(681, 390);
             Controls.Add(grpStats);
             Controls.Add(lblProgressPercent);
             Controls.Add(pbFiles);
             Controls.Add(btnCancel);
             Controls.Add(chkTestMode);
-            Controls.Add(lblAbout);
             Controls.Add(txtLog);
             Controls.Add(btnClearLog);
             Controls.Add(btnDestination);
@@ -383,11 +446,15 @@
             Controls.Add(label1);
             Controls.Add(txtSourceDir);
             Controls.Add(btnSync);
+            Controls.Add(menuStrip1);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Margin = new Padding(4);
-            MinimumSize = new Size(697, 405);
+            MainMenuStrip = menuStrip1;
+            MinimumSize = new Size(697, 429);
             Name = "frmMain";
             Text = "Jolly Roger's Directory Sync";
+            menuStrip1.ResumeLayout(false);
+            menuStrip1.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
 
@@ -404,7 +471,6 @@
         private System.Windows.Forms.Button btnDestination;
         private System.Windows.Forms.Button btnClearLog;
         private System.Windows.Forms.RichTextBox txtLog;
-        private System.Windows.Forms.Label lblAbout;
         private System.Windows.Forms.CheckBox chkTestMode;
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.ProgressBar pbFiles;
@@ -424,6 +490,15 @@
         private System.Windows.Forms.Label lblTotalTimeValue;
         private System.Windows.Forms.Label lblProgressPercent;
         private System.Windows.Forms.GroupBox grpStats;
+        private System.Windows.Forms.MenuStrip menuStrip1;
+        private System.Windows.Forms.ToolStripMenuItem fileToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem mnuExit;
+        private System.Windows.Forms.ToolStripMenuItem themeToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem mnuThemeLight;
+        private System.Windows.Forms.ToolStripMenuItem mnuThemeDark;
+        private System.Windows.Forms.ToolStripMenuItem mnuThemeSystem;
+        private System.Windows.Forms.ToolStripMenuItem helpToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem mnuAbout;
     }
 }
 

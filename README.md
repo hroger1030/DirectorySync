@@ -39,10 +39,19 @@ Or open `DirectorySync.sln` in Visual Studio and press F5.
    paths directly into the text boxes.
 2. **Test Mode** — when checked, the app logs everything it _would_ do without copying,
    deleting, or creating anything. Useful for a dry run before trusting it with real data.
-3. **Syncronize Directories** — starts the sync. A progress bar tracks file count, and the
-   log pane reports each copy/delete/skip as it happens.
+3. **Syncronize Directories** — starts the sync. A byte-weighted progress bar and percentage
+   readout track how much of the source has been examined, the Stats panel above the log
+   shows running totals (files copied, data copied, MB/sec, files removed, files skipped,
+   errors, total time), and the log pane reports each copy/delete/skip as it happens.
 4. **Cancel** — requests that a running sync stop after finishing its current directory.
 5. **Clear Log** — clears the log pane and resets the progress bar.
+
+### Menu bar
+
+- **File > Exit** — closes the app.
+- **Theme > Light / Dark / System** — switches the app's color theme; System follows the
+  Windows light/dark setting. The chosen theme is remembered between runs.
+- **Help > About** — shows the app name, version, and author.
 
 ## Notes and limitations
 
